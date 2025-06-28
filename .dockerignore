@@ -1,0 +1,64 @@
+# Git
+.git
+.gitignore
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/venv/
+**/env/
+**/.env
+**/.python-version
+**/*.so
+**/.coverage
+**/htmlcov/
+**/.pytest_cache/
+**/.mypy_cache/
+
+
+// ...existing code...
+
+# Next.js
+**/.next/
+**/out/
+**/.vercel/
+**/next-env.d.ts
+**/.next-cache/
+**/public/sw.js
+**/public/workbox-*.js
+**/public/worker-*.js
+**/public/sw.js.map
+**/public/workbox-*.js.map
+**/public/worker-*.js.map
+
+# ...existing code...
+
+# Database
+**/*.sqlite3
+**/*.db
+
+# Media files (you may want to exclude these for dev builds, but include for prod)
+# media/
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# IDE specific files
+.idea/
+.vscode/
+**/*.swp
+**/*.swo
+**/.DS_Store
+
+# Documentation
+README.md
+CHANGELOG.md
+LICENSE
+
+# Local development
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

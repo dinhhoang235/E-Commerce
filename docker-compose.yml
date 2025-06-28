@@ -1,0 +1,47 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    env_file:
+      - ./.env
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api
+      - NEXT_PUBLIC_WS_HOST=localhost:8000
+      - WATCHPACK_POLLING=true
+      - NODE_ENV=development
+
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8000:8000"  
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - db
+    env_file:
+      - ./.env
+
+  db:
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    env_file:
+      - ./.env
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+
+volumes:
+  mysql_data:
