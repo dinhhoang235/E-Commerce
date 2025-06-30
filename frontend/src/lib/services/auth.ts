@@ -21,11 +21,13 @@ export interface TokenResponse {
 }
 
 export interface User {
-    id : number
+    id: number
     username: string
     email: string
     first_name?: string
     last_name?: string
+    phone?: string
+    avatar?: string
     token?: TokenResponse
     address?: {
         street: string
@@ -34,7 +36,6 @@ export interface User {
         zipCode: string
         country: string
     }
-
 }
 
 // Hàm đăng ký
@@ -65,7 +66,7 @@ export async function login(payload: LoginPayload): Promise<TokenResponse> {
 
 // Lấy thông tin người dùng hiện tại
 export async function getCurrentUser(): Promise<User> {
-    const res = await api.get<User>("/users/me/")
+    const res = await api.get<User>("/users/me/account/")
     return res.data
 }
 
