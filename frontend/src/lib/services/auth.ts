@@ -30,11 +30,17 @@ export interface User {
     avatar?: string
     token?: TokenResponse
     address?: {
-        street: string
+        id?: number
+        first_name?: string
+        last_name?: string
+        phone?: string
+        address_line1: string
         city: string
         state: string
-        zipCode: string
+        zip_code: string
         country: string
+        is_default?: boolean
+        created_at?: string
     }
 }
 
@@ -70,6 +76,17 @@ export async function getCurrentUser(): Promise<User> {
     return res.data
 }
 
+export async function updateCurrentUser(data: Partial<User>): Promise<User> {
+  const res = await api.patch<User>("/users/me/account/", data)
+  return res.data
+}
+
+// Update address
+export async function updateAddress(addressData: any): Promise<any> {
+  const res = await api.patch("/users/me/account/", { address: addressData })
+  return res.data
+}
+
 // change password
 export async function changePassword(oldPassword: string, newPassword: string, confirmPassword: string): Promise<void> {
     await api.post("/users/change_password/", {
@@ -99,4 +116,23 @@ export async function checkEmailAvailability(email: string): Promise<boolean> {
         console.error('Error checking email availability:', error)
         return false // Conservative approach - assume not available on error
     }
+}
+
+// Upload avatar
+export async function uploadAvatar(file: File): Promise<User> {
+  const formData = new FormData()
+  formData.append('avatarFile', file)
+  
+  const res = await api.patch<User>("/users/me/account/", formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+  return res.data
+}
+
+// Remove avatar
+export async function removeAvatar(): Promise<User> {
+  const res = await api.patch<User>("/users/me/account/", { avatar: "" })
+  return res.data
 }

@@ -8,7 +8,8 @@ import {
     useCallback,
     type ReactNode,
 } from 'react'
-import { getCurrentUser, register as registerAPI } from '@/lib/services/auth'
+import { getCurrentUser, register as registerAPI, updateCurrentUser } from '@/lib/services/auth'
+
 type User = {
     id: number
     username: string
@@ -18,11 +19,17 @@ type User = {
     phone?: string
     avatar?: string
     address?: {
-        street: string
+        id?: number
+        first_name?: string
+        last_name?: string
+        phone?: string
+        address_line1: string
         city: string
         state: string
-        zipCode: string
+        zip_code: string
         country: string
+        is_default?: boolean
+        created_at?: string
     }
 }
 
@@ -41,6 +48,8 @@ type AuthContextType = {
     login: (tokens: { access: string; refresh: string }) => Promise<void>
     logout: () => void
     register: (userData: RegisterData) => Promise<boolean>
+    updateUser: (userData: Partial<User>) => Promise<User>
+    setUserData: (userData: User) => void
     isLoading: boolean
 }
 
@@ -96,11 +105,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (error) {
             console.error('Registration failed:', error)
             let message = 'Something went wrong.'
-            
+
             if (error && typeof error === 'object' && 'response' in error) {
                 const apiError = error as { response?: { data?: any } }
                 const errorData = apiError.response?.data
-                
+
                 // Handle different types of error responses
                 if (errorData) {
                     if (typeof errorData === 'string') {
@@ -126,12 +135,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             } else if (error instanceof Error) {
                 message = error.message
             }
-            
+
             alert(message)
         }
 
         setIsLoading(false)
         return false
+    }
+
+    const updateUser = async (userData: Partial<User>) => {
+        try {
+            const updated = await updateCurrentUser(userData) // gọi API PATCH
+            setUser(updated)
+            localStorage.setItem("user", JSON.stringify(updated))
+            return updated
+        } catch (error) {
+            console.error("Failed to update user:", error)
+            throw error // Re-throw to allow component to handle
+        }
+    }
+
+    const setUserData = (userData: User) => {
+        setUser(userData)
+        localStorage.setItem("user", JSON.stringify(userData))
     }
 
     // Load user on app start
@@ -152,6 +178,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 login,
                 logout,
                 register,
+                updateUser,
+                setUserData,
                 isLoading,
             }}
         >

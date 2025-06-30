@@ -10,7 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from rest_framework_simplejwt.views import TokenViewBase
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db.models import Q
 from users.models import Account, Address
 
@@ -122,18 +122,11 @@ class UserViewSet(viewsets.ModelViewSet):
     def change_password(self, request):
         """Change password for the currently authenticated user"""
         user = request.user
-        serializer = PasswordChangeSerializer(data=request.data)
+        serializer = PasswordChangeSerializer(data=request.data, context={'request': request})
         
         if serializer.is_valid():
-            # Check old password
-            if not user.check_password(serializer.data.get('old_password')):
-                return Response(
-                    {'old_password': ['Wrong password.']}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Set new password
-            user.set_password(serializer.data.get('new_password'))
+            # Set new password (old password validation is handled in serializer)
+            user.set_password(serializer.validated_data.get('new_password'))
             user.save()
             update_session_auth_hash(request, user)  # Keep user logged in
             return Response({'status': 'password updated'}, status=status.HTTP_200_OK)
@@ -141,7 +134,8 @@ class UserViewSet(viewsets.ModelViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class AccountView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get(self, request):
         try:
@@ -149,20 +143,15 @@ class AccountView(APIView):
         except Account.DoesNotExist:
             return Response({'detail': 'Account not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = AccountSerializer(account, context={'request': request})
-        return Response(serializer.data)
+        account_data = AccountSerializer(account, context={'request': request}).data
 
-    def put(self, request):
-        try:
-            account = request.user.account
-        except Account.DoesNotExist:
-            return Response({'detail': 'Account not found.'}, status=status.HTTP_404_NOT_FOUND)
+        address = Address.objects.filter(user=request.user).order_by('-is_default', '-created_at').first()
+        address_data = AddressSerializer(address).data if address else None
 
-        serializer = AccountSerializer(account, data=request.data, partial=False, context={'request': request})
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            **account_data,
+            "address": address_data,
+        })
 
     def patch(self, request):
         try:
@@ -170,11 +159,31 @@ class AccountView(APIView):
         except Account.DoesNotExist:
             return Response({'detail': 'Account not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = AccountSerializer(account, data=request.data, partial=True, context={'request': request})
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        account_serializer = AccountSerializer(account, data=request.data, partial=True, context={'request': request})
+        if not account_serializer.is_valid():
+            return Response(account_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        account_serializer.save()
+
+        address_data = request.data.get("address")
+        address_response = None
+
+        if address_data:
+            address = Address.objects.filter(user=request.user).order_by('-is_default', '-created_at').first()
+            if address:
+                address_serializer = AddressSerializer(address, data=address_data, partial=True)
+            else:
+                address_serializer = AddressSerializer(data=address_data)
+
+            if address_serializer.is_valid():
+                address_serializer.save(user=request.user)
+                address_response = address_serializer.data
+            else:
+                return Response({"address": address_serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            **account_serializer.data,
+            "address": address_response or None
+        })
     
 
 class AddressViewSet(viewsets.ModelViewSet):
