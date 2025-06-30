@@ -1,0 +1,101 @@
+import api from "@/lib/api"
+
+export interface RegisterPayload {
+    username: string
+    password: string
+    confirm_password: string
+    email?: string
+    first_name?: string
+    last_name?: string
+    phone?: string
+}
+
+export interface LoginPayload {
+    username_or_email: string
+    password: string
+}
+
+export interface TokenResponse {
+    access: string
+    refresh: string
+}
+
+export interface User {
+    id : number
+    username: string
+    email: string
+    first_name?: string
+    last_name?: string
+    token?: TokenResponse
+    address?: {
+        street: string
+        city: string
+        state: string
+        zipCode: string
+        country: string
+    }
+
+}
+
+// Hàm đăng ký
+export async function register(payload: RegisterPayload): Promise<User> {
+    const res = await api.post<User>("/register/", payload, {
+        withCredentials: false,
+    })
+
+    const user = res.data
+    if (user.token) {
+        localStorage.setItem("access_token", user.token.access)
+        localStorage.setItem("refresh_token", user.token.refresh)
+    }
+
+    return user
+}
+
+// Hàm đăng nhập
+export async function login(payload: LoginPayload): Promise<TokenResponse> {
+    const res = await api.post<TokenResponse>("/token/", payload)
+    const token = res.data
+
+    localStorage.setItem("access_token", token.access)
+    localStorage.setItem("refresh_token", token.refresh)
+
+    return token
+}
+
+// Lấy thông tin người dùng hiện tại
+export async function getCurrentUser(): Promise<User> {
+    const res = await api.get<User>("/users/me/")
+    return res.data
+}
+
+// change password
+export async function changePassword(oldPassword: string, newPassword: string, confirmPassword: string): Promise<void> {
+    await api.post("/users/change_password/", {
+        old_password: oldPassword,
+        new_password: newPassword,
+        confirm_password: confirmPassword,
+    });
+}
+
+// Check username availability
+export async function checkUsernameAvailability(username: string): Promise<boolean> {
+    try {
+        const res = await api.get<{ username: string; available: boolean }>(`/check-username/?username=${encodeURIComponent(username)}`)
+        return res.data.available
+    } catch (error) {
+        console.error('Error checking username availability:', error)
+        return false // Conservative approach - assume not available on error
+    }
+}
+
+// Check email availability
+export async function checkEmailAvailability(email: string): Promise<boolean> {
+    try {
+        const res = await api.get<{ email: string; available: boolean }>(`/check-email/?email=${encodeURIComponent(email)}`)
+        return res.data.available
+    } catch (error) {
+        console.error('Error checking email availability:', error)
+        return false // Conservative approach - assume not available on error
+    }
+}

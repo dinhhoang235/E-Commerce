@@ -20,7 +20,7 @@ from django.conf.urls.static import static
 from django.urls import path, include
 from backend.routers import router
 from rest_framework_simplejwt.views import TokenRefreshView
-from users.views import UserRegistrationView ,CustomTokenObtainPairView  
+from users.views import UserRegistrationView, CustomTokenObtainPairView, CheckUsernameAvailabilityView, CheckEmailAvailabilityView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -28,6 +28,8 @@ urlpatterns = [
     path('api/register/', UserRegistrationView.as_view(), name='user_register'),
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),  # login
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),  # refresh token
+    path('api/check-username/', CheckUsernameAvailabilityView.as_view(), name='check_username'),
+    path('api/check-email/', CheckEmailAvailabilityView.as_view(), name='check_email'),
     
     path('api/users/', include('users.urls')),
 ]

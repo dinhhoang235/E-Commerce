@@ -49,17 +49,18 @@ class CustomTokenObtainPairSerializer(serializers.Serializer):
         return token
 
 class BaseUserSerializer(serializers.ModelSerializer):
-    """Base serializer with common user functionality"""
     password = serializers.CharField(write_only=True, min_length=8)
     confirm_password = serializers.CharField(write_only=True)
     full_name = serializers.CharField(write_only=True, required=False)
+    phone = serializers.CharField(write_only=True, required=False)
     token = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
-            'id', 'username', 'email', 'password', 'confirm_password', 
-            'first_name', 'last_name', 'date_joined', 'token', 'full_name'
+            'id', 'username', 'email', 'password', 'confirm_password',
+            'first_name', 'last_name', 'date_joined', 'token',
+            'full_name', 'phone',
         ]
         read_only_fields = ['id', 'date_joined', 'token']
 
@@ -69,7 +70,6 @@ class BaseUserSerializer(serializers.ModelSerializer):
         return attrs
 
     def _process_full_name(self, user, full_name):
-        """Helper method to process full name"""
         if full_name:
             names = full_name.strip().split(" ", 1)
             user.first_name = names[0]
@@ -101,24 +101,19 @@ class UserSerializer(BaseUserSerializer):
         return user
 
 class UserRegistrationSerializer(BaseUserSerializer):
-    """Dedicated serializer for user registration"""
-    
     def validate(self, attrs):
         attrs = super().validate(attrs)
-        
-        # Check if username already exists
         if User.objects.filter(username=attrs.get('username')).exists():
             raise serializers.ValidationError({"username": "This username is already taken."})
-        
-        # Check if email already exists
         if attrs.get('email') and User.objects.filter(email=attrs.get('email')).exists():
             raise serializers.ValidationError({"email": "This email is already in use."})
-        
         return attrs
-    
+
     def create(self, validated_data):
         full_name = validated_data.pop('full_name', '')
+        phone = validated_data.pop('phone', '')
         validated_data.pop('confirm_password')
+
         user = User.objects.create_user(
             username=validated_data['username'],
             email=validated_data.get('email', ''),
@@ -126,8 +121,16 @@ class UserRegistrationSerializer(BaseUserSerializer):
             first_name=validated_data.get('first_name', ''),
             last_name=validated_data.get('last_name', ''),
         )
-        
+
         self._process_full_name(user, full_name)
+
+        # Gán thông tin vào Account
+        if hasattr(user, 'account'):
+            user.account.phone = phone
+            user.account.first_name = user.first_name
+            user.account.last_name = user.last_name
+            user.account.save()
+
         return user
         
 class PasswordChangeSerializer(serializers.Serializer):

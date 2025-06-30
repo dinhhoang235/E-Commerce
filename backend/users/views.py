@@ -27,6 +27,55 @@ from users.serializers import (
 class CustomTokenObtainPairView(TokenViewBase):
     serializer_class = CustomTokenObtainPairSerializer
 
+class CheckUsernameAvailabilityView(APIView):
+    """
+    Check if a username is available
+    """
+    permission_classes = [permissions.AllowAny]
+    
+    def get(self, request, *args, **kwargs):
+        username = request.query_params.get('username', '').strip()
+        
+        if not username:
+            return Response({'error': 'Username parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if len(username) < 3:
+            return Response({'error': 'Username must be at least 3 characters long'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if username contains only allowed characters
+        if not username.replace('_', '').isalnum():
+            return Response({'error': 'Username can only contain letters, numbers, and underscores'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        is_available = not User.objects.filter(username__iexact=username).exists()
+        
+        return Response({
+            'username': username,
+            'available': is_available
+        }, status=status.HTTP_200_OK)
+
+class CheckEmailAvailabilityView(APIView):
+    """
+    Check if an email is available
+    """
+    permission_classes = [permissions.AllowAny]
+    
+    def get(self, request, *args, **kwargs):
+        email = request.query_params.get('email', '').strip().lower()
+        
+        if not email:
+            return Response({'error': 'Email parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Basic email validation
+        if '@' not in email or '.' not in email.split('@')[-1]:
+            return Response({'error': 'Please enter a valid email address'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        is_available = not User.objects.filter(email__iexact=email).exists()
+        
+        return Response({
+            'email': email,
+            'available': is_available
+        }, status=status.HTTP_200_OK)
+
 @method_decorator(csrf_exempt, name='dispatch')
 class UserRegistrationView(APIView):
     """
