@@ -32,6 +32,7 @@ urlpatterns = [
     path('api/check-email/', CheckEmailAvailabilityView.as_view(), name='check_email'),
     
     path('api/users/', include('users.urls')),
+    path("api/admin/", include("adminpanel.urls")),
 ]
 # This is used for
 if settings.DEBUG: 

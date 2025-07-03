@@ -7,6 +7,7 @@ import { Footer } from "@/components/footer"
 // import { CartProvider } from "@/components/cart-provider"
 import { AuthProvider } from "@/components/auth-provider"
 import { Toaster } from "@/components/ui/toaster"
+import { LayoutWrapper } from "@/components/layout-wrapper"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -28,9 +29,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <AuthProvider>
           {/* <CartProvider> */}
-            <Header />
-            <main>{children}</main>
-            <Footer />
+            <LayoutWrapper>{children}</LayoutWrapper>
             <Toaster />
           {/* </CartProvider> */}
         </AuthProvider>
