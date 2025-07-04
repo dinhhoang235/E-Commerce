@@ -26,8 +26,13 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         // Check for existing admin session
         const savedAdmin = localStorage.getItem("adminUser")
-        if (savedAdmin) {
+        const accessToken = localStorage.getItem("access_token")
+        
+        if (savedAdmin && accessToken) {
             setAdminUser(JSON.parse(savedAdmin))
+        } else if (savedAdmin && !accessToken) {
+            // Admin data exists but no token, clear the session
+            localStorage.removeItem("adminUser")
         }
         setIsLoading(false)
     }, [])
@@ -57,6 +62,8 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     const adminLogout = () => {
         setAdminUser(null)
         localStorage.removeItem("adminUser")
+        localStorage.removeItem("access_token")
+        localStorage.removeItem("refresh_token")
     }
 
     return (
