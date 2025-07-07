@@ -18,3 +18,22 @@ class ImageHandlingMixin:
         if image and hasattr(image, "url"):
             return request.build_absolute_uri(image.url) if request else image.url
         return None
+
+    def extract_image_file(self, validated_data, file_field_name="imageFile"):
+        """Extract image file from validated_data to prevent model field errors"""
+        return validated_data.pop(file_field_name, serializers.empty)
+
+    def apply_image_file(self, instance, image_file, field_name="image"):
+        """Apply image file to instance after creation/update"""
+        if image_file is not serializers.empty:
+            if image_file:
+                # Delete old image if exists
+                if getattr(instance, field_name):
+                    getattr(instance, field_name).delete(save=False)
+                setattr(instance, field_name, image_file)
+            else:
+                # Empty imageFile means delete existing image
+                if getattr(instance, field_name):
+                    getattr(instance, field_name).delete(save=False)
+                setattr(instance, field_name, None)
+            instance.save()

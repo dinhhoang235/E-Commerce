@@ -4,7 +4,7 @@ from .mixins import ImageHandlingMixin
 
 class CategorySerializer(serializers.ModelSerializer, ImageHandlingMixin):
     product_count = serializers.IntegerField(read_only=True)
-    parent_id = serializers.IntegerField(source='parent.id', allow_null=True, required=False)
+    parent_id = serializers.IntegerField(write_only=True, allow_null=True, required=False)
     image = serializers.SerializerMethodField()
     imageFile = serializers.ImageField(write_only=True, required=False, allow_null=True)
 
@@ -15,16 +15,53 @@ class CategorySerializer(serializers.ModelSerializer, ImageHandlingMixin):
     def get_image(self, obj):
         return self.get_image_url(obj)
 
+    def to_representation(self, instance):
+        # Get the standard representation
+        representation = super().to_representation(instance)
+        # Add parent_id to the representation
+        representation['parent_id'] = instance.parent.id if instance.parent else None
+        return representation
+
     def create(self, validated_data):
+        # Extract image file first to avoid model field errors
+        image_file = self.extract_image_file(validated_data)
+        
+        # Handle parent_id separately
+        parent_id = validated_data.pop('parent_id', None)
+        if parent_id is not None:
+            try:
+                parent = Category.objects.get(id=parent_id)
+                validated_data['parent'] = parent
+            except Category.DoesNotExist:
+                raise serializers.ValidationError({'parent_id': 'Invalid parent category ID.'})
+        
+        # Create instance without imageFile
         instance = super().create(validated_data)
-        self.handle_image_file(instance, validated_data)
-        instance.save()
+        
+        # Apply image file after creation
+        self.apply_image_file(instance, image_file)
+        
         return instance
 
     def update(self, instance, validated_data):
-        self.handle_image_file(instance, validated_data)
+        # Extract image file first to avoid model field errors
+        image_file = self.extract_image_file(validated_data)
+        
+        # Handle parent_id separately
+        parent_id = validated_data.pop('parent_id', None)
+        if parent_id is not None:
+            try:
+                parent = Category.objects.get(id=parent_id)
+                validated_data['parent'] = parent
+            except Category.DoesNotExist:
+                raise serializers.ValidationError({'parent_id': 'Invalid parent category ID.'})
+        
+        # Update instance without imageFile
         instance = super().update(instance, validated_data)
-        instance.save()
+        
+        # Apply image file after update
+        self.apply_image_file(instance, image_file)
+        
         return instance
     
 class ProductSerializer(serializers.ModelSerializer, ImageHandlingMixin):
@@ -41,44 +78,25 @@ class ProductSerializer(serializers.ModelSerializer, ImageHandlingMixin):
         return self.get_image_url(obj)
 
     def create(self, validated_data):
-        # Handle image file before creating the instance
-        image_file = validated_data.pop('imageFile', None)
+        # Extract image file first to avoid model field errors
+        image_file = self.extract_image_file(validated_data)
         
-        # Create the instance without the imageFile field
+        # Create instance without imageFile
         instance = super().create(validated_data)
         
-        # Handle the image file after creation
-        if image_file is not None:
-            if image_file:
-                instance.image = image_file
-            else:
-                # Empty imageFile means delete existing image
-                if instance.image:
-                    instance.image.delete(save=False)
-                instance.image = None
-            instance.save()
+        # Apply image file after creation
+        self.apply_image_file(instance, image_file)
         
         return instance
 
     def update(self, instance, validated_data):
-        # Handle image file before updating
-        image_file = validated_data.pop('imageFile', None)
+        # Extract image file first to avoid model field errors
+        image_file = self.extract_image_file(validated_data)
         
-        # Update the instance without the imageFile field
+        # Update instance without imageFile
         instance = super().update(instance, validated_data)
         
-        # Handle the image file after update
-        if image_file is not None:
-            if image_file:
-                # Delete old image if exists
-                if instance.image:
-                    instance.image.delete(save=False)
-                instance.image = image_file
-            else:
-                # Empty imageFile means delete existing image
-                if instance.image:
-                    instance.image.delete(save=False)
-                instance.image = None
-            instance.save()
+        # Apply image file after update
+        self.apply_image_file(instance, image_file)
         
         return instance

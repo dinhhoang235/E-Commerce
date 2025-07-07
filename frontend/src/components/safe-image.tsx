@@ -10,10 +10,9 @@ interface SafeImageProps {
   height: number
   className?: string
   unoptimized?: boolean
-  key?: string
 }
 
-export function SafeImage({ src, alt, width, height, className = "", unoptimized = false, key }: SafeImageProps) {
+export function SafeImage({ src, alt, width, height, className = "", unoptimized = false }: SafeImageProps) {
   const [imageError, setImageError] = useState(false)
   const [imageSrc, setImageSrc] = useState(src)
 
@@ -21,7 +20,7 @@ export function SafeImage({ src, alt, width, height, className = "", unoptimized
   useEffect(() => {
     setImageError(false)
     setImageSrc(src)
-  }, [src, key])
+  }, [src])
 
   // For external URLs (localhost backend) or if there was an error, use regular img tag
   const shouldUseImgTag = imageError || 
@@ -39,7 +38,6 @@ export function SafeImage({ src, alt, width, height, className = "", unoptimized
         className={className}
         style={{ objectFit: 'contain' }}
         onError={() => setImageSrc("/placeholder.svg")}
-        key={key}
       />
     )
   }
@@ -57,7 +55,6 @@ export function SafeImage({ src, alt, width, height, className = "", unoptimized
         setImageError(true)
         setImageSrc(src) // Keep original src for img fallback
       }}
-      key={key}
     />
   )
 }

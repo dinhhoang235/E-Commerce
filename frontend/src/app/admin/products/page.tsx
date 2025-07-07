@@ -74,6 +74,7 @@ export default function AdminProductsPage() {
         
         console.log("Products API Response:", productsData) // Debug log
         console.log("Categories API Response:", categoriesData) // Debug log
+        console.log("Categories array length:", categoriesData?.length || 0) // Debug log
         
         // Handle products data
         if (Array.isArray(productsData)) {
@@ -368,7 +369,25 @@ export default function AdminProductsPage() {
             <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             {isRefreshing ? 'Refreshing...' : 'Refresh'}
           </Button>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+            setIsAddDialogOpen(open)
+            if (open) {
+              // Reset form when opening add dialog
+              setNewProduct({
+                name: "",
+                category: "",
+                price: "",
+                originalPrice: "",
+                description: "",
+                fullDescription: "",
+                badge: "",
+                image: "" as string | File | null,
+                features: [],
+                colors: [],
+                storage: [],
+              })
+            }
+          }}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
@@ -678,7 +697,7 @@ export default function AdminProductsPage() {
                   <TableRow key={product.id}>
                     <TableCell>
                       <div className="flex items-center space-x-3">
-                        <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center">
+                        <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center" key={`product-${product.id}-${updateTrigger}`}>
                           <SafeImage
                             src={getCachedImageUrl(formatImageUrl(product.image))}
                             alt={product.name || "Product"}
@@ -686,7 +705,6 @@ export default function AdminProductsPage() {
                             height={40}
                             className="object-contain"
                             unoptimized={isExternalImage(product.image)}
-                            key={`product-${product.id}-${updateTrigger}`}
                           />
                         </div>
                         <div>
@@ -735,10 +753,14 @@ export default function AdminProductsPage() {
                           variant="ghost"
                           size="icon"
                           onClick={() => {
+                            console.log("Edit Product - Categories available:", categories) // Debug log
+                            console.log("Edit Product - Selected product:", product) // Debug log
                             setEditingProduct(product)
+                            const categoryValue = (product.category?.id || product.category_id || "").toString()
+                            console.log("Edit Product - Category value:", categoryValue) // Debug log
                             setNewProduct({
                               name: product.name || "",
-                              category: product.category?.id || product.category_id || "",
+                              category: categoryValue,
                               price: product.price?.toString() || "",
                               originalPrice: (product.original_price || product.originalPrice)?.toString() || "",
                               description: product.description || "",
@@ -783,7 +805,7 @@ export default function AdminProductsPage() {
               <div className="grid md:grid-cols-2 gap-6">
                 {/* Product Image */}
                 <div className="space-y-4">
-                  <div className="aspect-square bg-slate-100 rounded-lg overflow-hidden">
+                  <div className="aspect-square bg-slate-100 rounded-lg overflow-hidden" key={`view-product-${viewingProduct.id}-${updateTrigger}`}>
                     <SafeImage
                       src={getCachedImageUrl(formatImageUrl(viewingProduct.image))}
                       alt={viewingProduct.name || "Product"}
@@ -791,7 +813,6 @@ export default function AdminProductsPage() {
                       height={400}
                       className="w-full h-full object-contain"
                       unoptimized={isExternalImage(viewingProduct.image)}
-                      key={`view-product-${viewingProduct.id}-${updateTrigger}`}
                     />
                   </div>
                 </div>
@@ -928,11 +949,15 @@ export default function AdminProductsPage() {
             </Button>
             <Button
               onClick={() => {
+                console.log("View Dialog Edit - Categories available:", categories) // Debug log
+                console.log("View Dialog Edit - Selected product:", viewingProduct) // Debug log
                 setIsViewDialogOpen(false)
                 setEditingProduct(viewingProduct)
+                const categoryValue = (viewingProduct.category?.id || viewingProduct.category_id || "").toString()
+                console.log("View Dialog Edit - Category value:", categoryValue) // Debug log
                 setNewProduct({
                   name: viewingProduct.name || "",
-                  category: viewingProduct.category?.id || viewingProduct.category_id || "",
+                  category: categoryValue,
                   price: viewingProduct.price?.toString() || "",
                   originalPrice: (viewingProduct.original_price || viewingProduct.originalPrice)?.toString() || "",
                   description: viewingProduct.description || "",
@@ -953,7 +978,25 @@ export default function AdminProductsPage() {
       </Dialog>
 
       {/* Edit Product Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
+        setIsEditDialogOpen(open)
+        if (!open) {
+          setEditingProduct(null)
+          setNewProduct({
+            name: "",
+            category: "",
+            price: "",
+            originalPrice: "",
+            description: "",
+            fullDescription: "",
+            badge: "",
+            image: "" as string | File | null,
+            features: [],
+            colors: [],
+            storage: [],
+          })
+        }
+      }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Product</DialogTitle>
@@ -973,17 +1016,23 @@ export default function AdminProductsPage() {
                 <Label htmlFor="category">Category</Label>
                 <Select
                   value={newProduct.category}
-                  onValueChange={(value) => setNewProduct((prev) => ({ ...prev, category: value }))}
+                  onValueChange={(value) => {
+                    console.log("Edit Dialog - Category selected:", value) // Debug log
+                    setNewProduct((prev) => ({ ...prev, category: value }))
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map((category) => (
-                      <SelectItem key={category.id} value={category.id.toString()}>
-                        {category.name}
-                      </SelectItem>
-                    ))}
+                    {categories.map((category) => {
+                      console.log("Edit Dialog - Rendering category:", category) // Debug log
+                      return (
+                        <SelectItem key={category.id} value={category.id.toString()}>
+                          {category.name}
+                        </SelectItem>
+                      )
+                    })}
                   </SelectContent>
                 </Select>
               </div>

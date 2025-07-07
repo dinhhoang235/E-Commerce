@@ -1,5 +1,33 @@
 import api from "@/lib/api";
 
+function buildFormDataIfNeeded(data: any): FormData | any {
+  const hasFile = Object.values(data).some((v) => v instanceof File)
+  const hasImageFile = 'imageFile' in data
+
+  if (hasFile || hasImageFile) {
+    const formData = new FormData()
+    for (const key in data) {
+      const value = data[key]
+      if (value !== undefined) {
+        if (value === null) {
+          // For null values, append empty string to indicate deletion
+          formData.append(key, '')
+        } else if (value instanceof File) {
+          formData.append(key, value)
+        } else if (Array.isArray(value)) {
+          // Handle arrays (like features, colors, storage)
+          formData.append(key, JSON.stringify(value))
+        } else {
+          formData.append(key, value.toString())
+        }
+      }
+    }
+    return formData
+  }
+
+  return data
+}
+
 export async function getAllCategories() {
   try {
     const response = await api.get("/categories/");
@@ -12,7 +40,8 @@ export async function getAllCategories() {
 
 export async function createCategory(categoryData: any) {
   try {
-    const response = await api.post("/categories/", categoryData);
+    const payload = buildFormDataIfNeeded(categoryData);
+    const response = await api.post("/categories/", payload);
     return response.data;
   } catch (error) {
     console.error("Error creating category:", error);
@@ -22,10 +51,18 @@ export async function createCategory(categoryData: any) {
 
 export async function updateCategory(categoryId: string, categoryData: any) {
   try {
-    const response = await api.put(`/categories/${categoryId}/`, categoryData);
+    const payload = buildFormDataIfNeeded(categoryData);
+    const response = await api.put(`/categories/${categoryId}/`, payload);
     return response.data;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error updating category:", error);
+    if (error.response?.status === 401) {
+      console.error("Authentication required. Please log in.")
+    } else if (error.response?.status === 403) {
+      console.error("Access forbidden.")
+    } else if (error.response?.data) {
+      console.error("Server error details:", error.response.data)
+    }
     throw error;
   }
 }

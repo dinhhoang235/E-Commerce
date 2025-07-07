@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Search, Edit, Trash2, Eye, FolderOpen, Package } from "lucide-react"
 import { ImageUpload } from "@/components/image-upload"
 import { useToast } from "@/hooks/use-toast"
+import { getAllCategories, createCategory, updateCategory, deleteCategory } from "@/lib/services/categories"
 
 interface Category {
   id: number
@@ -29,81 +30,29 @@ interface Category {
   slug: string
   description: string
   image: string
-  parentId?: number
+  parent?: number | null
+  parent_id?: number | null
+  is_active: boolean
+  product_count: number
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+interface NewCategoryForm {
+  name: string
+  slug: string
+  description: string
+  image: string | File | null
+  parentId: string
   isActive: boolean
-  productCount: number
-  sortOrder: number
-  createdAt: string
-  updatedAt: string
+  sortOrder: string
 }
 
 export default function AdminCategoriesPage() {
   const { toast } = useToast()
-  const [categories, setCategories] = useState<Category[]>([
-    {
-      id: 1,
-      name: "iPhone",
-      slug: "iphone",
-      description: "Apple iPhone smartphones with cutting-edge technology",
-      image: "/placeholder.svg?height=200&width=200",
-      isActive: true,
-      productCount: 8,
-      sortOrder: 1,
-      createdAt: "2024-01-01",
-      updatedAt: "2024-01-15",
-    },
-    {
-      id: 2,
-      name: "iPad",
-      slug: "ipad",
-      description: "Apple iPad tablets for work and creativity",
-      image: "/placeholder.svg?height=200&width=200",
-      isActive: true,
-      productCount: 6,
-      sortOrder: 2,
-      createdAt: "2024-01-01",
-      updatedAt: "2024-01-15",
-    },
-    {
-      id: 3,
-      name: "MacBook",
-      slug: "macbook",
-      description: "Apple MacBook laptops for professionals",
-      image: "/placeholder.svg?height=200&width=200",
-      isActive: true,
-      productCount: 4,
-      sortOrder: 3,
-      createdAt: "2024-01-01",
-      updatedAt: "2024-01-15",
-    },
-    {
-      id: 4,
-      name: "iPhone Pro",
-      slug: "iphone-pro",
-      description: "Professional iPhone models with advanced features",
-      image: "/placeholder.svg?height=200&width=200",
-      parentId: 1,
-      isActive: true,
-      productCount: 4,
-      sortOrder: 1,
-      createdAt: "2024-01-05",
-      updatedAt: "2024-01-15",
-    },
-    {
-      id: 5,
-      name: "iPad Pro",
-      slug: "ipad-pro",
-      description: "Professional iPad models for creative work",
-      image: "/placeholder.svg?height=200&width=200",
-      parentId: 2,
-      isActive: true,
-      productCount: 2,
-      sortOrder: 1,
-      createdAt: "2024-01-05",
-      updatedAt: "2024-01-15",
-    },
-  ])
-
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
@@ -112,7 +61,7 @@ export default function AdminCategoriesPage() {
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
 
-  const [newCategory, setNewCategory] = useState({
+  const [newCategory, setNewCategory] = useState<NewCategoryForm>({
     name: "",
     slug: "",
     description: "",
@@ -122,9 +71,48 @@ export default function AdminCategoriesPage() {
     sortOrder: "",
   })
 
-  const filteredCategories = categories.filter((category) => {
+  // Fetch categories on component mount
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setLoading(true)
+        const data = await getAllCategories()
+        console.log('Categories data:', data) // Debug log
+        
+        // Handle paginated response format
+        if (data && typeof data === 'object' && 'results' in data && Array.isArray(data.results)) {
+          setCategories(data.results)
+        } else if (Array.isArray(data)) {
+          // Handle direct array response
+          setCategories(data)
+        } else {
+          console.error('Categories data is not in expected format:', data)
+          setCategories([])
+          toast({
+            title: "Error",
+            description: "Invalid categories data format",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error)
+        setCategories([]) // Reset to empty array on error
+        toast({
+          title: "Error",
+          description: "Failed to fetch categories",
+          variant: "destructive",
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCategories()
+  }, [toast])
+
+  const filteredCategories = (categories || []).filter((category) => {
     const matchesSearch = category.name.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === "all" || (statusFilter === "active" ? category.isActive : !category.isActive)
+    const matchesStatus = statusFilter === "all" || (statusFilter === "active" ? category.is_active : !category.is_active)
     return matchesSearch && matchesStatus
   })
 
@@ -135,7 +123,7 @@ export default function AdminCategoriesPage() {
       .replace(/(^-|-$)/g, "")
   }
 
-  const handleAddCategory = () => {
+  const handleAddCategory = async () => {
     if (!newCategory.name) {
       toast({
         title: "Error",
@@ -145,39 +133,47 @@ export default function AdminCategoriesPage() {
       return
     }
 
-    const category: Category = {
-      id: Date.now(),
-      name: newCategory.name,
-      slug: newCategory.slug || generateSlug(newCategory.name),
-      description: newCategory.description,
-      image: newCategory.image || "/placeholder.svg?height=200&width=200",
-      parentId: newCategory.parentId ? Number.parseInt(newCategory.parentId) : undefined,
-      isActive: newCategory.isActive,
-      productCount: 0,
-      sortOrder: newCategory.sortOrder ? Number.parseInt(newCategory.sortOrder) : categories.length + 1,
-      createdAt: new Date().toISOString().split("T")[0],
-      updatedAt: new Date().toISOString().split("T")[0],
+    try {
+      const categoryData = {
+        name: newCategory.name,
+        slug: newCategory.slug || generateSlug(newCategory.name),
+        description: newCategory.description,
+        imageFile: newCategory.image instanceof File ? newCategory.image : undefined,
+        image: typeof newCategory.image === 'string' ? newCategory.image : undefined,
+        parent_id: newCategory.parentId ? Number.parseInt(newCategory.parentId) : undefined,
+        is_active: newCategory.isActive,
+        sort_order: newCategory.sortOrder ? Number.parseInt(newCategory.sortOrder) : undefined,
+      }
+
+      const createdCategory = await createCategory(categoryData)
+      setCategories([...(categories || []), createdCategory])
+      
+      setNewCategory({
+        name: "",
+        slug: "",
+        description: "",
+        image: "",
+        parentId: "",
+        isActive: true,
+        sortOrder: "",
+      })
+      setIsAddDialogOpen(false)
+
+      toast({
+        title: "Success",
+        description: "Category created successfully",
+      })
+    } catch (error) {
+      console.error('Error creating category:', error)
+      toast({
+        title: "Error",
+        description: "Failed to create category",
+        variant: "destructive",
+      })
     }
-
-    setCategories([...categories, category])
-    setNewCategory({
-      name: "",
-      slug: "",
-      description: "",
-      image: "",
-      parentId: "",
-      isActive: true,
-      sortOrder: "",
-    })
-    setIsAddDialogOpen(false)
-
-    toast({
-      title: "Success",
-      description: "Category created successfully",
-    })
   }
 
-  const handleEditCategory = () => {
+  const handleEditCategory = async () => {
     if (!editingCategory || !newCategory.name) {
       toast({
         title: "Error",
@@ -187,40 +183,50 @@ export default function AdminCategoriesPage() {
       return
     }
 
-    const updatedCategory: Category = {
-      ...editingCategory,
-      name: newCategory.name,
-      slug: newCategory.slug || generateSlug(newCategory.name),
-      description: newCategory.description,
-      image: newCategory.image,
-      parentId: newCategory.parentId ? Number.parseInt(newCategory.parentId) : undefined,
-      isActive: newCategory.isActive,
-      sortOrder: newCategory.sortOrder ? Number.parseInt(newCategory.sortOrder) : editingCategory.sortOrder,
-      updatedAt: new Date().toISOString().split("T")[0],
+    try {
+      const categoryData = {
+        name: newCategory.name,
+        slug: newCategory.slug || generateSlug(newCategory.name),
+        description: newCategory.description,
+        imageFile: newCategory.image instanceof File ? newCategory.image : undefined,
+        image: typeof newCategory.image === 'string' ? newCategory.image : undefined,
+        parent_id: newCategory.parentId ? Number.parseInt(newCategory.parentId) : undefined,
+        is_active: newCategory.isActive,
+        sort_order: newCategory.sortOrder ? Number.parseInt(newCategory.sortOrder) : undefined,
+      }
+
+      const updatedCategory = await updateCategory(editingCategory.id.toString(), categoryData)
+      setCategories((categories || []).map((c) => (c.id === editingCategory.id ? updatedCategory : c)))
+      
+      setEditingCategory(null)
+      setNewCategory({
+        name: "",
+        slug: "",
+        description: "",
+        image: "",
+        parentId: "",
+        isActive: true,
+        sortOrder: "",
+      })
+      setIsEditDialogOpen(false)
+
+      toast({
+        title: "Success",
+        description: "Category updated successfully",
+      })
+    } catch (error) {
+      console.error('Error updating category:', error)
+      toast({
+        title: "Error",
+        description: "Failed to update category",
+        variant: "destructive",
+      })
     }
-
-    setCategories(categories.map((c) => (c.id === editingCategory.id ? updatedCategory : c)))
-    setEditingCategory(null)
-    setNewCategory({
-      name: "",
-      slug: "",
-      description: "",
-      image: "",
-      parentId: "",
-      isActive: true,
-      sortOrder: "",
-    })
-    setIsEditDialogOpen(false)
-
-    toast({
-      title: "Success",
-      description: "Category updated successfully",
-    })
   }
 
-  const handleDeleteCategory = (id: number) => {
-    const categoryToDelete = categories.find((c) => c.id === id)
-    const hasChildren = categories.some((c) => c.parentId === id)
+  const handleDeleteCategory = async (id: number) => {
+    const categoryToDelete = (categories || []).find((c) => c.id === id)
+    const hasChildren = (categories || []).some((c) => c.parent_id === id)
 
     if (hasChildren) {
       toast({
@@ -231,41 +237,88 @@ export default function AdminCategoriesPage() {
       return
     }
 
-    setCategories(categories.filter((c) => c.id !== id))
-    toast({
-      title: "Success",
-      description: `Category "${categoryToDelete?.name}" deleted successfully`,
-    })
+    try {
+      await deleteCategory(id.toString())
+      setCategories((categories || []).filter((c) => c.id !== id))
+      toast({
+        title: "Success",
+        description: `Category "${categoryToDelete?.name}" deleted successfully`,
+      })
+    } catch (error) {
+      console.error('Error deleting category:', error)
+      toast({
+        title: "Error",
+        description: "Failed to delete category",
+        variant: "destructive",
+      })
+    }
   }
 
-  const toggleCategoryStatus = (id: number) => {
-    setCategories(
-      categories.map((c) =>
-        c.id === id ? { ...c, isActive: !c.isActive, updatedAt: new Date().toISOString().split("T")[0] } : c,
-      ),
-    )
+  const toggleCategoryStatus = async (id: number) => {
+    const category = (categories || []).find((c) => c.id === id)
+    if (!category) return
+
+    try {
+      const updatedCategory = await updateCategory(id.toString(), {
+        ...category,
+        is_active: !category.is_active,
+      })
+      setCategories(
+        (categories || []).map((c) => (c.id === id ? updatedCategory : c))
+      )
+    } catch (error) {
+      console.error('Error toggling category status:', error)
+      toast({
+        title: "Error",
+        description: "Failed to update category status",
+        variant: "destructive",
+      })
+    }
   }
 
   const getParentCategories = () => {
-    return categories.filter((c) => !c.parentId)
+    return (categories || []).filter((c) => !c.parent_id)
   }
 
   const getCategoryHierarchy = (category: Category) => {
-    if (!category.parentId) return category.name
+    if (!category.parent_id) return category.name
 
-    const parent = categories.find((c) => c.id === category.parentId)
+    const parent = (categories || []).find((c) => c.id === category.parent_id)
     return parent ? `${parent.name} > ${category.name}` : category.name
   }
 
   return (
     <div className="space-y-8">
-      {/* Header */}
-      <div className="flex justify-between items-center">
+      {loading ? (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+            <p className="mt-2 text-gray-600">Loading categories...</p>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Header */}
+          <div className="flex justify-between items-center">{/* ...existing code... */}
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Categories</h1>
           <p className="text-slate-600">Organize your products with categories and subcategories</p>
         </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+          setIsAddDialogOpen(open)
+          if (open) {
+            // Reset form when opening add dialog
+            setNewCategory({
+              name: "",
+              slug: "",
+              description: "",
+              image: "",
+              parentId: "",
+              isActive: true,
+              sortOrder: "",
+            })
+          }
+        }}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
@@ -277,7 +330,7 @@ export default function AdminCategoriesPage() {
               <DialogTitle>Add New Category</DialogTitle>
               <DialogDescription>Create a new category to organize your products</DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
+            <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Category Name *</Label>
@@ -289,7 +342,7 @@ export default function AdminCategoriesPage() {
                       setNewCategory((prev) => ({
                         ...prev,
                         name,
-                        slug: prev.slug || generateSlug(name),
+                        slug: generateSlug(name),
                       }))
                     }}
                     placeholder="e.g., Smartphones"
@@ -350,7 +403,7 @@ export default function AdminCategoriesPage() {
 
               <div className="space-y-2">
                 <ImageUpload
-                  value={newCategory.image}
+                  value={newCategory.image || undefined}
                   onChange={(value) => setNewCategory((prev) => ({ ...prev, image: value }))}
                   label="Category Image"
                 />
@@ -383,7 +436,7 @@ export default function AdminCategoriesPage() {
             <FolderOpen className="h-4 w-4 text-slate-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{categories.length}</div>
+            <div className="text-2xl font-bold">{(categories || []).length}</div>
           </CardContent>
         </Card>
         <Card>
@@ -392,7 +445,7 @@ export default function AdminCategoriesPage() {
             <FolderOpen className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{categories.filter((c) => c.isActive).length}</div>
+            <div className="text-2xl font-bold">{(categories || []).filter((c) => c.is_active).length}</div>
           </CardContent>
         </Card>
         <Card>
@@ -401,7 +454,7 @@ export default function AdminCategoriesPage() {
             <FolderOpen className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{categories.filter((c) => !c.parentId).length}</div>
+            <div className="text-2xl font-bold">{(categories || []).filter((c) => !c.parent_id).length}</div>
           </CardContent>
         </Card>
         <Card>
@@ -410,7 +463,7 @@ export default function AdminCategoriesPage() {
             <Package className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{categories.reduce((sum, c) => sum + c.productCount, 0)}</div>
+            <div className="text-2xl font-bold">{(categories || []).reduce((sum, c) => sum + (c.product_count || 0), 0)}</div>
           </CardContent>
         </Card>
       </div>
@@ -467,7 +520,7 @@ export default function AdminCategoriesPage() {
             </TableHeader>
             <TableBody>
               {filteredCategories
-                .sort((a, b) => a.sortOrder - b.sortOrder)
+                .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
                 .map((category) => (
                   <TableRow key={category.id}>
                     <TableCell>
@@ -487,27 +540,26 @@ export default function AdminCategoriesPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center">
-                        {category.parentId && <span className="text-slate-400 mr-1">└</span>}
+                        {category.parent_id && <span className="text-slate-400 mr-1">└</span>}
                         <span className="text-sm">{getCategoryHierarchy(category)}</span>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{category.productCount} products</Badge>
+                      <Badge variant="outline">{category.product_count || 0} products</Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center space-x-2">
-                        <Badge variant={category.isActive ? "default" : "secondary"}>
-                          {category.isActive ? "Active" : "Inactive"}
+                        <Badge variant={category.is_active ? "default" : "secondary"}>
+                          {category.is_active ? "Active" : "Inactive"}
                         </Badge>
                         <Switch
-                          checked={category.isActive}
+                          checked={category.is_active}
                           onCheckedChange={() => toggleCategoryStatus(category.id)}
-                        //   size="sm"
                         />
                       </div>
                     </TableCell>
-                    <TableCell>{category.sortOrder}</TableCell>
-                    <TableCell>{new Date(category.updatedAt).toLocaleDateString()}</TableCell>
+                    <TableCell>{category.sort_order || 0}</TableCell>
+                    <TableCell>{new Date(category.updated_at).toLocaleDateString()}</TableCell>
                     <TableCell>
                       <div className="flex items-center space-x-2">
                         <Button
@@ -530,9 +582,9 @@ export default function AdminCategoriesPage() {
                               slug: category.slug,
                               description: category.description,
                               image: category.image,
-                              parentId: category.parentId?.toString() || "",
-                              isActive: category.isActive,
-                              sortOrder: category.sortOrder.toString(),
+                              parentId: category.parent_id?.toString() || "",
+                              isActive: category.is_active,
+                              sortOrder: category.sort_order?.toString() || "",
                             })
                             setIsEditDialogOpen(true)
                           }}
@@ -587,30 +639,30 @@ export default function AdminCategoriesPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <h3 className="font-medium">Status</h3>
-                      <Badge variant={viewingCategory.isActive ? "default" : "secondary"}>
-                        {viewingCategory.isActive ? "Active" : "Inactive"}
+                      <Badge variant={viewingCategory.is_active ? "default" : "secondary"}>
+                        {viewingCategory.is_active ? "Active" : "Inactive"}
                       </Badge>
                     </div>
                     <div>
                       <h3 className="font-medium">Products</h3>
-                      <p className="text-slate-600">{viewingCategory.productCount} products</p>
+                      <p className="text-slate-600">{viewingCategory.product_count || 0} products</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <h3 className="font-medium">Sort Order</h3>
-                      <p className="text-slate-600">{viewingCategory.sortOrder}</p>
+                      <p className="text-slate-600">{viewingCategory.sort_order || 0}</p>
                     </div>
                     <div>
                       <h3 className="font-medium">Category ID</h3>
                       <p className="text-slate-600">#{viewingCategory.id}</p>
                     </div>
                   </div>
-                  {viewingCategory.parentId && (
+                  {viewingCategory.parent_id && (
                     <div>
                       <h3 className="font-medium">Parent Category</h3>
                       <p className="text-slate-600">
-                        {categories.find((c) => c.id === viewingCategory.parentId)?.name || "Unknown"}
+                        {(categories || []).find((c) => c.id === viewingCategory.parent_id)?.name || "Unknown"}
                       </p>
                     </div>
                   )}
@@ -619,11 +671,11 @@ export default function AdminCategoriesPage() {
               <div className="grid grid-cols-2 gap-4 pt-4 border-t">
                 <div>
                   <h3 className="font-medium">Created</h3>
-                  <p className="text-slate-600">{new Date(viewingCategory.createdAt).toLocaleDateString()}</p>
+                  <p className="text-slate-600">{new Date(viewingCategory.created_at).toLocaleDateString()}</p>
                 </div>
                 <div>
                   <h3 className="font-medium">Last Updated</h3>
-                  <p className="text-slate-600">{new Date(viewingCategory.updatedAt).toLocaleDateString()}</p>
+                  <p className="text-slate-600">{new Date(viewingCategory.updated_at).toLocaleDateString()}</p>
                 </div>
               </div>
             </div>
@@ -641,9 +693,9 @@ export default function AdminCategoriesPage() {
                   slug: viewingCategory!.slug,
                   description: viewingCategory!.description,
                   image: viewingCategory!.image,
-                  parentId: viewingCategory!.parentId?.toString() || "",
-                  isActive: viewingCategory!.isActive,
-                  sortOrder: viewingCategory!.sortOrder.toString(),
+                  parentId: viewingCategory!.parent_id?.toString() || "",
+                  isActive: viewingCategory!.is_active,
+                  sortOrder: viewingCategory!.sort_order?.toString() || "",
                 })
                 setIsEditDialogOpen(true)
               }}
@@ -655,13 +707,27 @@ export default function AdminCategoriesPage() {
       </Dialog>
 
       {/* Edit Category Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
+        setIsEditDialogOpen(open)
+        if (!open) {
+          setEditingCategory(null)
+          setNewCategory({
+            name: "",
+            slug: "",
+            description: "",
+            image: "",
+            parentId: "",
+            isActive: true,
+            sortOrder: "",
+          })
+        }
+      }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Category</DialogTitle>
             <DialogDescription>Update category information</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-name">Category Name *</Label>
@@ -673,7 +739,7 @@ export default function AdminCategoriesPage() {
                     setNewCategory((prev) => ({
                       ...prev,
                       name,
-                      slug: prev.slug || generateSlug(name),
+                      slug: generateSlug(name),
                     }))
                   }}
                 />
@@ -732,7 +798,7 @@ export default function AdminCategoriesPage() {
 
             <div className="space-y-2">
               <ImageUpload
-                value={newCategory.image}
+                value={newCategory.image || undefined}
                 onChange={(value) => setNewCategory((prev) => ({ ...prev, image: value }))}
                 label="Category Image"
               />
@@ -770,6 +836,8 @@ export default function AdminCategoriesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+        </>
+      )}
     </div>
   )
 }
