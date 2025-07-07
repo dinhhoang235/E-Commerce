@@ -41,20 +41,43 @@ const navigation = [
 ]
 
 function AdminLayoutContent({ children }: { children: React.ReactNode }) {
-  const { adminUser, adminLogout } = useAdmin()
+  const { adminUser, adminLogout, isLoading } = useAdmin()
   const router = useRouter()
   const pathname = usePathname()
 
   useEffect(() => {
-    if (!adminUser && pathname !== "/admin/login") {
+    // Only redirect if we're not loading and not on the login page
+    if (!isLoading && !adminUser && pathname !== "/admin/login") {
+      console.log("Redirecting to admin login - no admin user found")
       router.push("/admin/login")
     }
-  }, [adminUser, pathname, router])
+  }, [adminUser, pathname, router, isLoading])
 
-  if (!adminUser && pathname !== "/admin/login") {
-    return null
+  // Show loading spinner while checking authentication
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-slate-600">Loading...</p>
+        </div>
+      </div>
+    )
   }
 
+  // If no admin user and not on login page, show nothing (redirect will happen)
+  if (!adminUser && pathname !== "/admin/login") {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-slate-600">Redirecting to login...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // If on login page, show the login page
   if (pathname === "/admin/login") {
     return <>{children}</>
   }

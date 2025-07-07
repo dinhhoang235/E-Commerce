@@ -18,12 +18,14 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Search, Edit, Trash2, Eye, Star } from "lucide-react"
+import { Plus, Search, Edit, Trash2, Eye, Star, RefreshCw } from "lucide-react"
 import { ImageUpload } from "@/components/image-upload"
 import { SafeImage } from "@/components/safe-image"
-import { getallProducts, createProduct, updateProduct, deleteProduct } from "@/lib/services/products"
+import { getAllProducts, createProduct, updateProduct, deleteProduct } from "@/lib/services/products"
 import { getAllCategories } from "@/lib/services/categories"
 import { formatImageUrl, isExternalImage } from "@/lib/utils/image"
+import { useImageCache } from "@/hooks/use-image-cache"
+import { useToast } from "@/hooks/use-toast"
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<any[]>([])
@@ -37,6 +39,11 @@ export default function AdminProductsPage() {
   const [viewingProduct, setViewingProduct] = useState<any>(null)
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [imageUpdateTrigger, setImageUpdateTrigger] = useState(0) // Force image refresh
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  
+  const { getCachedImageUrl, invalidateCache, refreshAllImages, updateTrigger } = useImageCache()
+  const { toast } = useToast()
 
   const [newProduct, setNewProduct] = useState({
     name: "",
@@ -46,7 +53,7 @@ export default function AdminProductsPage() {
     description: "",
     fullDescription: "",
     badge: "",
-    image: "",
+    image: "" as string | File | null,
     features: [] as string[],
     colors: [] as string[],
     storage: [] as string[],
@@ -61,7 +68,7 @@ export default function AdminProductsPage() {
         
         // Load products and categories in parallel
         const [productsData, categoriesData] = await Promise.all([
-          getallProducts(),
+          getAllProducts(),
           getAllCategories()
         ])
         
@@ -108,6 +115,42 @@ export default function AdminProductsPage() {
     loadData()
   }, [])
 
+  // Reload products function
+  const reloadProducts = async () => {
+    try {
+      setIsRefreshing(true)
+      const productsData = await getAllProducts()
+      
+      if (Array.isArray(productsData)) {
+        setProducts(productsData)
+      } else if (productsData && Array.isArray(productsData.results)) {
+        setProducts(productsData.results)
+      } else if (productsData && typeof productsData === 'object') {
+        setProducts([productsData])
+      } else {
+        setProducts([])
+      }
+      
+      // Force image refresh
+      setImageUpdateTrigger(prev => prev + 1)
+      refreshAllImages()
+      
+      toast({
+        title: "Products refreshed",
+        description: "Product list and images have been refreshed.",
+      })
+    } catch (err) {
+      console.error("Error reloading products:", err)
+      toast({
+        title: "Refresh failed",
+        description: "Failed to refresh products. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
   const filteredProducts = Array.isArray(products) ? products.filter((product) => {
     if (!product || !product.name) return false
     
@@ -122,7 +165,7 @@ export default function AdminProductsPage() {
 
   const handleAddProduct = async () => {
     try {
-      const productData = {
+      const productData: any = {
         name: newProduct.name,
         category_id: newProduct.category, // Use category_id for backend
         price: Number.parseFloat(newProduct.price),
@@ -130,16 +173,28 @@ export default function AdminProductsPage() {
         description: newProduct.description,
         full_description: newProduct.fullDescription,
         badge: newProduct.badge || null,
-        image: newProduct.image || null,
         features: newProduct.features,
         colors: newProduct.colors,
         storage: newProduct.storage,
       }
 
+      // Handle image field properly
+      if (newProduct.image instanceof File) {
+        // New file selected
+        productData.imageFile = newProduct.image
+      } else if (newProduct.image === null) {
+        // Image marked for deletion
+        productData.imageFile = null
+      }
+      // Don't set anything for existing string URLs to keep existing image
+
       console.log("Sending product data:", productData) // Debug log
 
       const createdProduct = await createProduct(productData)
       console.log("Created product:", createdProduct) // Debug log
+      
+      // Force image refresh by updating the trigger
+      setImageUpdateTrigger(prev => prev + 1)
       
       // Ensure products is an array before spreading
       const currentProducts = Array.isArray(products) ? products : []
@@ -154,7 +209,7 @@ export default function AdminProductsPage() {
         description: "",
         fullDescription: "",
         badge: "",
-        image: "",
+        image: "" as string | File | null,
         features: [],
         colors: [],
         storage: [],
@@ -170,7 +225,7 @@ export default function AdminProductsPage() {
     if (!editingProduct) return
 
     try {
-      const productData = {
+      const productData: any = {
         name: newProduct.name,
         category_id: newProduct.category, // Use category_id for backend
         price: Number.parseFloat(newProduct.price),
@@ -178,20 +233,41 @@ export default function AdminProductsPage() {
         description: newProduct.description,
         full_description: newProduct.fullDescription,
         badge: newProduct.badge || null,
-        image: newProduct.image || null,
         features: newProduct.features,
         colors: newProduct.colors,
         storage: newProduct.storage,
       }
+
+      // Handle image field properly
+      if (newProduct.image instanceof File) {
+        // New file selected
+        productData.imageFile = newProduct.image
+      } else if (newProduct.image === null) {
+        // Image marked for deletion
+        productData.imageFile = null
+      }
+      // Don't set anything for existing string URLs to keep existing image
 
       console.log("Updating product data:", productData) // Debug log
 
       const updatedProduct = await updateProduct(editingProduct.id, productData)
       console.log("Updated product:", updatedProduct) // Debug log
       
-      // Ensure products is an array before mapping
-      const currentProducts = Array.isArray(products) ? products : []
-      setProducts(currentProducts.map((p) => (p.id === editingProduct.id ? updatedProduct : p)))
+      // Invalidate cache for the updated product's image
+      if (updatedProduct.image) {
+        invalidateCache(formatImageUrl(updatedProduct.image))
+      }
+      
+      // Force image refresh by updating the trigger
+      setImageUpdateTrigger(prev => prev + 1)
+      
+      // Reload products to ensure we have the latest data
+      await reloadProducts()
+      
+      // Update viewing product if it's the same one being edited
+      if (viewingProduct && viewingProduct.id === editingProduct.id) {
+        setViewingProduct(updatedProduct)
+      }
       
       // Reset form
       setEditingProduct(null)
@@ -203,15 +279,26 @@ export default function AdminProductsPage() {
         description: "",
         fullDescription: "",
         badge: "",
-        image: "",
+        image: "" as string | File | null,
         features: [],
         colors: [],
         storage: [],
       })
       setIsEditDialogOpen(false)
+      
+      // Show success toast
+      toast({
+        title: "Product updated successfully",
+        description: "The product has been updated and images refreshed.",
+      })
     } catch (error) {
       console.error("Error updating product:", error)
       setError("Failed to update product")
+      toast({
+        title: "Update failed",
+        description: "Failed to update the product. Please try again.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -271,14 +358,24 @@ export default function AdminProductsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Products</h1>
           <p className="text-slate-600">Manage your product catalog</p>
         </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Product
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={reloadProducts}
+            disabled={isRefreshing}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh'}
+          </Button>
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Product
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Add New Product</DialogTitle>
               <DialogDescription>Create a new product for your store</DialogDescription>
@@ -354,22 +451,21 @@ export default function AdminProductsPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="badge">Badge (Optional)</Label>
-                  <Input
-                    id="badge"
-                    value={newProduct.badge}
-                    onChange={(e) => setNewProduct((prev) => ({ ...prev, badge: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <ImageUpload
-                    value={newProduct.image}
-                    onChange={(value) => setNewProduct((prev) => ({ ...prev, image: value }))}
-                    label="Product Image"
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="badge">Badge (Optional)</Label>
+                <Input
+                  id="badge"
+                  value={newProduct.badge}
+                  onChange={(e) => setNewProduct((prev) => ({ ...prev, badge: e.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <ImageUpload
+                  value={newProduct.image || undefined}
+                  onChange={(value) => setNewProduct((prev) => ({ ...prev, image: value }))}
+                  label="Product Image"
+                />
               </div>
 
               {/* Features Section */}
@@ -513,6 +609,7 @@ export default function AdminProductsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Filters */}
@@ -583,12 +680,13 @@ export default function AdminProductsPage() {
                       <div className="flex items-center space-x-3">
                         <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center">
                           <SafeImage
-                            src={formatImageUrl(product.image)}
+                            src={getCachedImageUrl(formatImageUrl(product.image))}
                             alt={product.name || "Product"}
                             width={40}
                             height={40}
                             className="object-contain"
                             unoptimized={isExternalImage(product.image)}
+                            key={`product-${product.id}-${updateTrigger}`}
                           />
                         </div>
                         <div>
@@ -620,7 +718,8 @@ export default function AdminProductsPage() {
                         <span className="text-sm">{product.rating || 0}</span>
                         <span className="text-xs text-slate-500 ml-1">({product.reviews || 0})</span>
                       </div>
-                    </TableCell>                    <TableCell>
+                    </TableCell>
+                    <TableCell>
                       <div className="flex items-center space-x-2">
                         <Button
                           variant="ghost"
@@ -645,7 +744,7 @@ export default function AdminProductsPage() {
                               description: product.description || "",
                               fullDescription: product.full_description || product.fullDescription || "",
                               badge: product.badge || "",
-                              image: product.image || "",
+                              image: product.image || "" as string | File | null,
                               features: product.features || [],
                               colors: product.colors || [],
                               storage: product.storage || [],
@@ -686,12 +785,13 @@ export default function AdminProductsPage() {
                 <div className="space-y-4">
                   <div className="aspect-square bg-slate-100 rounded-lg overflow-hidden">
                     <SafeImage
-                      src={formatImageUrl(viewingProduct.image)}
+                      src={getCachedImageUrl(formatImageUrl(viewingProduct.image))}
                       alt={viewingProduct.name || "Product"}
                       width={400}
                       height={400}
                       className="w-full h-full object-contain"
                       unoptimized={isExternalImage(viewingProduct.image)}
+                      key={`view-product-${viewingProduct.id}-${updateTrigger}`}
                     />
                   </div>
                 </div>
@@ -838,7 +938,7 @@ export default function AdminProductsPage() {
                   description: viewingProduct.description || "",
                   fullDescription: viewingProduct.full_description || viewingProduct.fullDescription || "",
                   badge: viewingProduct.badge || "",
-                  image: viewingProduct.image || "",
+                  image: viewingProduct.image || "" as string | File | null,
                   features: viewingProduct.features || [],
                   colors: viewingProduct.colors || [],
                   storage: viewingProduct.storage || [],
@@ -930,22 +1030,21 @@ export default function AdminProductsPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="badge">Badge (Optional)</Label>
-                <Input
-                  id="badge"
-                  value={newProduct.badge}
-                  onChange={(e) => setNewProduct((prev) => ({ ...prev, badge: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <ImageUpload
-                  value={newProduct.image}
-                  onChange={(value) => setNewProduct((prev) => ({ ...prev, image: value }))}
-                  label="Product Image"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="badge">Badge (Optional)</Label>
+              <Input
+                id="badge"
+                value={newProduct.badge}
+                onChange={(e) => setNewProduct((prev) => ({ ...prev, badge: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <ImageUpload
+                value={newProduct.image || undefined}
+                onChange={(value) => setNewProduct((prev) => ({ ...prev, image: value }))}
+                label="Product Image"
+              />
             </div>
 
             {/* Features Section */}

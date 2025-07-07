@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,8 +17,15 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
-  const { adminLogin, isLoading } = useAdmin()
+  const { adminLogin, adminUser, isLoading } = useAdmin()
   const router = useRouter()
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (adminUser) {
+      router.push("/admin")
+    }
+  }, [adminUser, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

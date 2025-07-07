@@ -1,31 +1,76 @@
 "use client"
 
 import type React from "react"
-
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
-import { Upload, X, ImageIcon } from "lucide-react"
+import { Upload, X, ImageIcon, Undo2 } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 import { SafeImage } from "./safe-image"
 
 interface ImageUploadProps {
-  value?: string
-  onChange: (value: string) => void
+  value?: string | File
+  onChange: (value: string | null | File ) => void  // null = xóa ảnh
   label?: string
   className?: string
 }
 
-export function ImageUpload({ value, onChange, label = "Product Image", className }: ImageUploadProps) {
+export function ImageUpload({
+  value,
+  onChange,
+  label = "Product Image",
+  className,
+}: ImageUploadProps) {
+  const [preview, setPreview] = useState<string | null>(null)
+  const [isMarkedForDelete, setIsMarkedForDelete] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    if (value instanceof File) {
+      // If value is a File object, create a preview URL
+      const blobUrl = URL.createObjectURL(value)
+      setPreview(blobUrl)
+      setIsMarkedForDelete(false)
+      
+      // Cleanup the blob URL when component unmounts or value changes
+      return () => URL.revokeObjectURL(blobUrl)
+    } else if (typeof value === 'string') {
+      // If value is a string URL
+      setPreview(value)
+      setIsMarkedForDelete(false)
+    } else {
+      // If value is null or undefined
+      setPreview(null)
+      setIsMarkedForDelete(false)
+    }
+  }, [value])
 
   const handleFileSelect = (file: File) => {
-    if (file && file.type.startsWith("image/")) {
-      // Create a blob URL for the uploaded file
-      const imageUrl = URL.createObjectURL(file)
-      onChange(imageUrl)
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Invalid file type",
+        description: "Please select an image file (JPG, PNG, GIF)",
+        variant: "destructive",
+      })
+      return
     }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Please select an image smaller than 10MB",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const blobUrl = URL.createObjectURL(file)
+    setPreview(blobUrl)
+    setIsMarkedForDelete(false)
+    onChange(file) // Truyền File object lên parent (form)
   }
 
   const handleDrop = (e: React.DragEvent) => {
@@ -38,16 +83,6 @@ export function ImageUpload({ value, onChange, label = "Product Image", classNam
     }
   }
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(true)
-  }
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-  }
-
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (files && files.length > 0) {
@@ -56,42 +91,64 @@ export function ImageUpload({ value, onChange, label = "Product Image", classNam
   }
 
   const handleRemoveImage = () => {
-    onChange("")
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ""
+    setIsMarkedForDelete(true)
+    setPreview(null)
+    onChange(null) // null = đánh dấu xóa
+  }
+
+  const handleUndoRemove = () => {
+    setIsMarkedForDelete(false)
+    if (value instanceof File) {
+      const blobUrl = URL.createObjectURL(value)
+      setPreview(blobUrl)
+    } else if (typeof value === 'string') {
+      setPreview(value)
+    } else {
+      setPreview(null)
     }
+    onChange(value || null) // Khôi phục giá trị cũ
   }
 
   return (
     <div className={`space-y-2 ${className}`}>
       <Label>{label}</Label>
 
-      {value ? (
+      {preview || isMarkedForDelete ? (
         <Card className="relative">
           <CardContent className="p-4">
             <div className="relative aspect-square w-full max-w-xs mx-auto">
-              <SafeImage
-                src={value || "/placeholder.svg"}
-                alt="Product preview"
-                width={300}
-                height={300}
-                className="object-contain rounded-lg w-full h-full"
-              />
-              <Button
-                type="button"
-                variant="destructive"
-                size="icon"
-                className="absolute top-2 right-2 h-8 w-8"
-                onClick={handleRemoveImage}
-              >
-                <X className="h-4 w-4" />
-              </Button>
+              {preview ? (
+                <SafeImage
+                  src={preview}
+                  alt="Product preview"
+                  width={300}
+                  height={300}
+                  className="object-contain rounded-lg w-full h-full"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground bg-slate-50 rounded-lg border">
+                  Image will be removed
+                </div>
+              )}
+              <div className="absolute top-2 right-2 flex gap-2">
+                {isMarkedForDelete ? (
+                  <Button type="button" variant="outline" size="icon" onClick={handleUndoRemove}>
+                    <Undo2 className="h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button type="button" variant="destructive" size="icon" onClick={handleRemoveImage}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </div>
-            <div className="mt-4 text-center">
-              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
-                Change Image
-              </Button>
-            </div>
+            {!isMarkedForDelete && (
+              <div className="mt-4 text-center">
+                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
+                  Change Image
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -100,8 +157,14 @@ export function ImageUpload({ value, onChange, label = "Product Image", classNam
             isDragging ? "border-blue-500 bg-blue-50" : "border-slate-300 hover:border-slate-400"
           }`}
           onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
+          onDragOver={(e) => {
+            e.preventDefault()
+            setIsDragging(true)
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault()
+            setIsDragging(false)
+          }}
           onClick={() => fileInputRef.current?.click()}
         >
           <CardContent className="p-8">

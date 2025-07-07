@@ -1,79 +1,84 @@
 from rest_framework import serializers
 from .models import Category, Product
+from .mixins import ImageHandlingMixin
 
-class CategorySerializer(serializers.ModelSerializer):
+class CategorySerializer(serializers.ModelSerializer, ImageHandlingMixin):
     product_count = serializers.IntegerField(read_only=True)
     parent_id = serializers.IntegerField(source='parent.id', allow_null=True, required=False)
     image = serializers.SerializerMethodField()
-    image_file = serializers.ImageField(write_only=True, required=False)
-    
+    imageFile = serializers.ImageField(write_only=True, required=False, allow_null=True)
+
     class Meta:
         model = Category
         fields = '__all__'
-        
+
     def get_image(self, obj):
-        request = self.context.get("request")
-        if obj.image and hasattr(obj.image, 'url'):
-            return request.build_absolute_uri(obj.image.url) if request else obj.image.url
-        return None
-    
+        return self.get_image_url(obj)
+
     def create(self, validated_data):
-        image_file = validated_data.pop("image_file", None)
         instance = super().create(validated_data)
-        if image_file:
-            instance.image = image_file
-            instance.save()
+        self.handle_image_file(instance, validated_data)
+        instance.save()
         return instance
 
     def update(self, instance, validated_data):
-        image_file = validated_data.pop("image_file", None)
-
-        if image_file in [None, ""]:
-            instance.image.delete(save=False)
-            instance.image = None
-
+        self.handle_image_file(instance, validated_data)
         instance = super().update(instance, validated_data)
-
-        if image_file:
-            instance.image = image_file
-            instance.save()
+        instance.save()
         return instance
     
-class ProductSerializer(serializers.ModelSerializer):
+class ProductSerializer(serializers.ModelSerializer, ImageHandlingMixin):
     category = CategorySerializer(read_only=True)
     category_id = serializers.PrimaryKeyRelatedField(queryset=Category.objects.all(), source='category', write_only=True)
     image = serializers.SerializerMethodField()
-    image_file = serializers.ImageField(write_only=True, required=False)
+    imageFile = serializers.ImageField(write_only=True, required=False, allow_null=True)
+
     class Meta:
         model = Product
         fields = '__all__'
 
     def get_image(self, obj):
-        request = self.context.get("request")
-        if obj.image and hasattr(obj.image, 'url'):
-            return request.build_absolute_uri(obj.image.url) if request else obj.image.url
-        return None
-    
+        return self.get_image_url(obj)
+
     def create(self, validated_data):
-        image_file = validated_data.pop("image_file", None)
+        # Handle image file before creating the instance
+        image_file = validated_data.pop('imageFile', None)
+        
+        # Create the instance without the imageFile field
         instance = super().create(validated_data)
-        if image_file:
-            instance.image = image_file
+        
+        # Handle the image file after creation
+        if image_file is not None:
+            if image_file:
+                instance.image = image_file
+            else:
+                # Empty imageFile means delete existing image
+                if instance.image:
+                    instance.image.delete(save=False)
+                instance.image = None
             instance.save()
+        
         return instance
 
     def update(self, instance, validated_data):
-        image_file = validated_data.pop('image_file', None)
-
-        if image_file in [None, ""]:
-            instance.image.delete(save=False)
-            instance.image = None
-
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-
-        if image_file:
-            instance.image = image_file
-
-        instance.save()
+        # Handle image file before updating
+        image_file = validated_data.pop('imageFile', None)
+        
+        # Update the instance without the imageFile field
+        instance = super().update(instance, validated_data)
+        
+        # Handle the image file after update
+        if image_file is not None:
+            if image_file:
+                # Delete old image if exists
+                if instance.image:
+                    instance.image.delete(save=False)
+                instance.image = image_file
+            else:
+                # Empty imageFile means delete existing image
+                if instance.image:
+                    instance.image.delete(save=False)
+                instance.image = None
+            instance.save()
+        
         return instance
