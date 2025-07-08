@@ -33,6 +33,7 @@ urlpatterns = [
     
     path('api/users/', include('users.urls')),
     path("api/admin/", include("adminpanel.urls")),
+    path('api/orders/', include('orders.urls')),
 ]
 # This is used for
 if settings.DEBUG: 
