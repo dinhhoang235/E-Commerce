@@ -3,6 +3,11 @@ from django.contrib.auth.models import User
 from .models import Account, Address
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
+from django.db.models import Count, Sum
+from django.utils import timezone
+from datetime import datetime, timedelta
+# Import orders model for the CustomerSerializer
+# from orders.models import Order  # Uncomment when orders app is ready
 
 class CustomTokenObtainPairSerializer(serializers.Serializer):
     username_or_email = serializers.CharField()
@@ -200,4 +205,72 @@ class AddressSerializer(serializers.ModelSerializer):
 
     def get_country_label(self, obj):
         return obj.get_country_display()
+
+class AdminCustomerSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField()
+    location = serializers.SerializerMethodField()
+    orders = serializers.SerializerMethodField()
+    totalSpent = serializers.SerializerMethodField()
+    joinDate = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+    phone = serializers.SerializerMethodField()
     
+    class Meta:
+        model = User
+        fields = [
+            'id', 'name', 'email', 'phone', 'location', 
+            'orders', 'totalSpent', 'joinDate', 'status'
+        ]
+    
+    def get_name(self, obj):
+        """Get full name from first_name and last_name"""
+        if obj.first_name and obj.last_name:
+            return f"{obj.first_name} {obj.last_name}"
+        elif obj.first_name:
+            return obj.first_name
+        elif obj.last_name:
+            return obj.last_name
+        return obj.username
+    
+    def get_location(self, obj):
+        """Get location from user's default address"""
+        try:
+            default_address = obj.addresses.filter(is_default=True).first()
+            if not default_address:
+                default_address = obj.addresses.first()
+            
+            if default_address:
+                return f"{default_address.city}, {default_address.state}"
+            return "No address"
+        except:
+            return "No address"
+    
+    def get_orders(self, obj):
+        """Get total number of orders"""
+        return obj.orders.count()
+    
+    def get_totalSpent(self, obj):
+        """Get total amount spent across all orders"""
+        total = obj.orders.aggregate(total=Sum('total'))['total']
+        return float(total) if total else 0.0
+    
+    def get_joinDate(self, obj):
+        """Get join date in YYYY-MM-DD format"""
+        return obj.date_joined.strftime('%Y-%m-%d')
+    
+    def get_status(self, obj):
+        """Determine user status based on recent activity"""
+        # Consider user active if they have orders in the last 6 months
+        six_months_ago = timezone.now() - timedelta(days=180)
+        recent_orders = obj.orders.filter(date__gte=six_months_ago).exists()
+        
+        if recent_orders or obj.last_login and obj.last_login >= six_months_ago:
+            return "active"
+        return "inactive"
+    
+    def get_phone(self, obj):
+        """Get phone number from Account model"""
+        try:
+            return obj.account.phone if obj.account.phone else ""
+        except:
+            return ""

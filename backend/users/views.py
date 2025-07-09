@@ -13,6 +13,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db.models import Q
 from users.models import Account, Address
+from django.utils import timezone
+from datetime import timedelta
 
 
 from users.serializers import (
@@ -22,6 +24,7 @@ from users.serializers import (
     CustomTokenObtainPairSerializer,
     AccountSerializer,
     AddressSerializer,
+    AdminCustomerSerializer,
 )
 
 class CustomTokenObtainPairView(TokenViewBase):
@@ -197,3 +200,61 @@ class AddressViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         # Gán user khi tạo mới
         serializer.save(user=self.request.user)
+
+class AdminCustomerListView(APIView):
+    """
+    API endpoint to get customer list with order statistics
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        # Get all users who have made at least one order or have complete profiles
+        users = User.objects.select_related('account').prefetch_related('addresses', 'orders')
+        
+        # Filter by search query if provided
+        search = request.query_params.get('search', '')
+        if search:
+            users = users.filter(
+                Q(username__icontains=search) |
+                Q(email__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search)
+            )
+        
+        # Filter by status if provided
+        status_filter = request.query_params.get('status', '')
+        if status_filter in ['active', 'inactive']:
+
+            
+            six_months_ago = timezone.now() - timedelta(days=180)
+            
+            if status_filter == 'active':
+                users = users.filter(
+                    Q(orders__date__gte=six_months_ago) |
+                    Q(last_login__gte=six_months_ago)
+                ).distinct()
+            else:
+                active_user_ids = User.objects.filter(
+                    Q(orders__date__gte=six_months_ago) |
+                    Q(last_login__gte=six_months_ago)
+                ).distinct().values_list('id', flat=True)
+                users = users.exclude(id__in=active_user_ids)
+        
+        # Pagination
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 10))
+        start = (page - 1) * page_size
+        end = start + page_size
+        
+        total_users = users.count()
+        users_page = users[start:end]
+        
+        serializer = AdminCustomerSerializer(users_page, many=True)
+        
+        return Response({
+            'count': total_users,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': (total_users + page_size - 1) // page_size,
+            'results': serializer.data
+        })
