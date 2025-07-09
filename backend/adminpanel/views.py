@@ -10,6 +10,8 @@ from decimal import Decimal
 from orders.models import Order, OrderItem
 from products.models import Product
 from users.models import Account
+from .models import StoreSettings
+from .serializers import StoreSettingsSerializer
 
 class AdminLoginView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -326,3 +328,100 @@ class AnalyticsDashboardView(APIView):
             "trafficSources": traffic_view.get(request).data,
             "conversionRate": conversion_view.get(request).data
         })
+
+
+class StoreSettingsView(APIView):
+    """
+    API view to retrieve and update store settings
+    """
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+    
+    def get(self, request):
+        """Get current store settings"""
+        try:
+            settings = StoreSettings.get_settings()
+            serializer = StoreSettingsSerializer(settings)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(
+                {"error": "Failed to retrieve settings", "detail": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def put(self, request):
+        """Update store settings"""
+        try:
+            settings = StoreSettings.get_settings()
+            serializer = StoreSettingsSerializer(settings, data=request.data, partial=True)
+            
+            if serializer.is_valid():
+                serializer.save()
+                return Response(
+                    {
+                        "message": "Settings updated successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+            else:
+                return Response(
+                    {
+                        "error": "Validation failed",
+                        "details": serializer.errors
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except Exception as e:
+            return Response(
+                {"error": "Failed to update settings", "detail": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class StoreSettingsPartialView(APIView):
+    """
+    API view for partial settings updates (specific sections)
+    """
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+    
+    def patch(self, request, section=None):
+        """Update specific section of settings"""
+        try:
+            settings = StoreSettings.get_settings()
+            
+            # Define which fields belong to which sections
+            section_fields = {
+                'general': ['store_name', 'store_description', 'store_email', 'store_phone', 'currency', 'timezone'],
+                'notifications': ['email_notifications', 'order_notifications', 'inventory_alerts'],
+                'security': ['maintenance_mode', 'allow_guest_checkout', 'require_email_verification']
+            }
+            
+            if section and section in section_fields:
+                # Filter request data to only include fields for this section
+                filtered_data = {k: v for k, v in request.data.items() if k in section_fields[section]}
+                serializer = StoreSettingsSerializer(settings, data=filtered_data, partial=True)
+            else:
+                # Update all provided fields
+                serializer = StoreSettingsSerializer(settings, data=request.data, partial=True)
+            
+            if serializer.is_valid():
+                serializer.save()
+                return Response(
+                    {
+                        "message": f"Settings {'section ' + section if section else ''} updated successfully",
+                        "data": serializer.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+            else:
+                return Response(
+                    {
+                        "error": "Validation failed",
+                        "details": serializer.errors
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except Exception as e:
+            return Response(
+                {"error": "Failed to update settings", "detail": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
