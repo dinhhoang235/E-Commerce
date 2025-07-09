@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -16,74 +16,109 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Search, Eye, Package, Truck, CheckCircle } from "lucide-react"
+import { adminOrdersApi, type Order, type OrderStats } from "@/lib/services/orders"
+import { useToast } from "@/hooks/use-toast"
 
 export default function AdminOrdersPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [orders, setOrders] = useState<Order[]>([])
+  const [stats, setStats] = useState<OrderStats | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [updating, setUpdating] = useState(false)
+  const { toast } = useToast()
 
-  // Mock orders data
-  const orders = [
-    {
-      id: "APL001234",
-      customer: "John Doe",
-      email: "john@example.com",
-      products: ["iPhone 15 Pro", "AirPods Pro"],
-      total: 1299.0,
-      status: "completed",
-      date: "2024-01-15",
-      shipping: {
-        address: "123 Main St, San Francisco, CA 94102",
-        method: "Standard Shipping",
-      },
-    },
-    {
-      id: "APL001235",
-      customer: "Jane Smith",
-      email: "jane@example.com",
-      products: ["MacBook Air M2"],
-      total: 1299.0,
-      status: "processing",
-      date: "2024-01-15",
-      shipping: {
-        address: "456 Oak Ave, Los Angeles, CA 90210",
-        method: "Express Shipping",
-      },
-    },
-    {
-      id: "APL001236",
-      customer: "Mike Johnson",
-      email: "mike@example.com",
-      products: ['iPad Pro 12.9"', "Apple Pencil"],
-      total: 1199.0,
-      status: "shipped",
-      date: "2024-01-14",
-      shipping: {
-        address: "789 Pine St, Seattle, WA 98101",
-        method: "Standard Shipping",
-      },
-    },
-    {
-      id: "APL001237",
-      customer: "Sarah Wilson",
-      email: "sarah@example.com",
-      products: ["iPhone 15"],
-      total: 799.0,
-      status: "pending",
-      date: "2024-01-14",
-      shipping: {
-        address: "321 Elm St, Portland, OR 97201",
-        method: "Standard Shipping",
-      },
-    },
-  ]
+  console.log("Current orders state:", orders, "Type:", typeof orders, "IsArray:", Array.isArray(orders))
 
-  const filteredOrders = orders.filter((order) => {
+  // Fetch orders and stats on component mount
+  useEffect(() => {
+    fetchOrders()
+    fetchStats()
+  }, [])
+
+  // Fetch orders when filters change
+  useEffect(() => {
+    fetchOrders()
+  }, [statusFilter])
+
+  const fetchOrders = async () => {
+    try {
+      setLoading(true)
+      const filters: any = {}
+      if (statusFilter !== "all") {
+        filters.status = statusFilter
+      }
+      if (searchTerm) {
+        filters.customer = searchTerm
+      }
+      
+      const ordersData = await adminOrdersApi.getOrders(filters)
+      console.log("API Response:", ordersData) // Debug log
+      // Ensure ordersData is an array
+      if (Array.isArray(ordersData)) {
+        setOrders(ordersData)
+      } else {
+        console.error("API returned non-array data:", ordersData)
+        setOrders([])
+        toast({
+          title: "Error",
+          description: "Invalid data format received from server.",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error fetching orders:", error)
+      setOrders([]) // Reset to empty array on error
+      toast({
+        title: "Error",
+        description: "Failed to fetch orders. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchStats = async () => {
+    try {
+      const statsData = await adminOrdersApi.getOrderStats()
+      setStats(statsData)
+    } catch (error) {
+      console.error("Error fetching stats:", error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch order statistics.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Debounce search to avoid too many API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchOrders()
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [searchTerm])
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value)
+    // If search is cleared, fetch all orders immediately
+    if (value === "") {
+      fetchOrders()
+    }
+  }
+
+  const filteredOrders = Array.isArray(orders) ? orders.filter((order) => {
     const matchesSearch =
       order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.customer.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = statusFilter === "all" || order.status === statusFilter
     return matchesSearch && matchesStatus
-  })
+  }) : []
+
+  console.log("Filtering - orders:", orders, "filteredOrders:", filteredOrders)
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -95,6 +130,8 @@ export default function AdminOrdersPage() {
         return <Truck className="h-4 w-4" />
       case "completed":
         return <CheckCircle className="h-4 w-4" />
+      case "cancelled":
+        return <Package className="h-4 w-4" />
       default:
         return <Package className="h-4 w-4" />
     }
@@ -110,14 +147,40 @@ export default function AdminOrdersPage() {
         return "outline"
       case "completed":
         return "default"
+      case "cancelled":
+        return "destructive"
       default:
         return "secondary"
     }
   }
 
-  const updateOrderStatus = (orderId: string, newStatus: string) => {
-    // In real app, this would update via API
-    console.log(`Updating order ${orderId} to ${newStatus}`)
+  const updateOrderStatus = async (orderId: string, newStatus: string) => {
+    try {
+      setUpdating(true)
+      await adminOrdersApi.updateOrderStatus(orderId, newStatus as Order['status'])
+      
+      // Update local state
+      setOrders(orders.map(order => 
+        order.id === orderId ? { ...order, status: newStatus as Order['status'] } : order
+      ))
+      
+      // Refresh stats
+      fetchStats()
+      
+      toast({
+        title: "Success",
+        description: `Order ${orderId} status updated to ${newStatus}`,
+      })
+    } catch (error) {
+      console.error("Error updating order status:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update order status. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setUpdating(false)
+    }
   }
 
   return (
@@ -136,7 +199,7 @@ export default function AdminOrdersPage() {
             <Package className="h-4 w-4 text-slate-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{orders.length}</div>
+            <div className="text-2xl font-bold">{stats?.total_orders || 0}</div>
           </CardContent>
         </Card>
         <Card>
@@ -145,7 +208,7 @@ export default function AdminOrdersPage() {
             <Package className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{orders.filter((o) => o.status === "pending").length}</div>
+            <div className="text-2xl font-bold">{stats?.pending_orders || 0}</div>
           </CardContent>
         </Card>
         <Card>
@@ -154,7 +217,7 @@ export default function AdminOrdersPage() {
             <Package className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{orders.filter((o) => o.status === "processing").length}</div>
+            <div className="text-2xl font-bold">{stats?.processing_orders || 0}</div>
           </CardContent>
         </Card>
         <Card>
@@ -163,7 +226,7 @@ export default function AdminOrdersPage() {
             <CheckCircle className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{orders.filter((o) => o.status === "completed").length}</div>
+            <div className="text-2xl font-bold">{stats?.completed_orders || 0}</div>
           </CardContent>
         </Card>
       </div>
@@ -181,7 +244,7 @@ export default function AdminOrdersPage() {
                 <Input
                   placeholder="Search orders..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => handleSearchChange(e.target.value)}
                   className="pl-10"
                 />
               </div>
@@ -196,6 +259,7 @@ export default function AdminOrdersPage() {
                 <SelectItem value="processing">Processing</SelectItem>
                 <SelectItem value="shipped">Shipped</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -208,6 +272,17 @@ export default function AdminOrdersPage() {
           <CardTitle>Orders ({filteredOrders.length})</CardTitle>
         </CardHeader>
         <CardContent>
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-slate-600">Loading orders...</div>
+            </div>
+          ) : filteredOrders.length === 0 ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-slate-600">
+                {searchTerm || statusFilter !== "all" ? "No orders match your filters." : "No orders found."}
+              </div>
+            </div>
+          ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -239,7 +314,7 @@ export default function AdminOrdersPage() {
                       ))}
                     </div>
                   </TableCell>
-                  <TableCell className="font-medium">${order.total.toFixed(2)}</TableCell>
+                  <TableCell className="font-medium">${parseFloat(order.total).toFixed(2)}</TableCell>
                   <TableCell>
                     <Badge variant={getStatusColor(order.status)} className="flex items-center gap-1 w-fit">
                       {getStatusIcon(order.status)}
@@ -272,6 +347,7 @@ export default function AdminOrdersPage() {
                                 <Select
                                   value={order.status}
                                   onValueChange={(value) => updateOrderStatus(order.id, value)}
+                                  disabled={updating}
                                 >
                                   <SelectTrigger>
                                     <SelectValue />
@@ -281,6 +357,7 @@ export default function AdminOrdersPage() {
                                     <SelectItem value="processing">Processing</SelectItem>
                                     <SelectItem value="shipped">Shipped</SelectItem>
                                     <SelectItem value="completed">Completed</SelectItem>
+                                    <SelectItem value="cancelled">Cancelled</SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>
@@ -302,7 +379,7 @@ export default function AdminOrdersPage() {
                             </div>
                             <div className="flex justify-between items-center pt-4 border-t">
                               <span className="font-medium">Total</span>
-                              <span className="text-xl font-bold">${order.total.toFixed(2)}</span>
+                              <span className="text-xl font-bold">${parseFloat(order.total).toFixed(2)}</span>
                             </div>
                           </div>
                         </DialogContent>
@@ -313,6 +390,7 @@ export default function AdminOrdersPage() {
               ))}
             </TableBody>
           </Table>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -4,6 +4,7 @@ from rest_framework.decorators import api_view, permission_classes
 from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
 from django.db import models
+from django.db.models import Count, Sum
 from .models import Order, OrderItem
 from .serializers import (
     OrderSerializer, 
@@ -101,7 +102,6 @@ class AdminOrderStatsView(generics.GenericAPIView):
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
     
     def get(self, request):
-        from django.db.models import Count, Sum
         from datetime import datetime, timedelta
         
         # Get basic stats
@@ -142,7 +142,7 @@ def create_order_from_cart(request):
     Create an order from the user's cart
     """
     user = request.user
-    cart_items = CartItem.objects.filter(user=user)
+    cart_items = CartItem.objects.filter(cart__user=user)
     
     if not cart_items.exists():
         return Response(
@@ -184,133 +184,6 @@ def user_order_history(request):
         'page_size': page_size,
         'has_next': end < orders.count()
     })
-
-
-@api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated, permissions.IsAdminUser])
-def admin_sample_orders(request):
-    """
-    Return sample orders in the exact format you specified
-    """
-    sample_data = [
-        {
-            "id": "APL001234",
-            "customer": "John Doe",
-            "email": "john@example.com",
-            "products": ["iPhone 15 Pro", "AirPods Pro"],
-            "total": 1299.0,
-            "status": "completed",
-            "date": "2024-01-15",
-            "shipping": {
-                "address": "123 Main St, San Francisco, CA 94102",
-                "method": "Standard Shipping",
-            },
-        },
-        {
-            "id": "APL001235",
-            "customer": "Jane Smith",
-            "email": "jane@example.com",
-            "products": ["MacBook Air M2"],
-            "total": 1299.0,
-            "status": "processing",
-            "date": "2024-01-15",
-            "shipping": {
-                "address": "456 Oak Ave, Los Angeles, CA 90210",
-                "method": "Express Shipping",
-            },
-        }
-    ]
-    
-    return Response(sample_data)
-    serializer_class = OrderSerializer
-    permission_classes = [permissions.IsAdminUser]
-    queryset = Order.objects.all().order_by('-date')
-    
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        status_filter = self.request.query_params.get('status', None)
-        if status_filter:
-            queryset = queryset.filter(status=status_filter)
-        return queryset
-
-
-class AdminOrderDetailView(generics.RetrieveUpdateAPIView):
-    """
-    Admin view to retrieve and update any order
-    """
-    serializer_class = OrderDetailSerializer
-    permission_classes = [permissions.IsAdminUser]
-    queryset = Order.objects.all()
-
-
-@api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def create_order_from_cart(request):
-    """
-    Create an order from user's cart items
-    """
-    try:
-        user = request.user
-        cart_items = CartItem.objects.filter(user=user)
-        
-        if not cart_items.exists():
-            return Response(
-                {'error': 'Cart is empty'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Get shipping address from request
-        shipping_address_id = request.data.get('shipping_address')
-        if not shipping_address_id:
-            return Response(
-                {'error': 'Shipping address is required'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Prepare order data
-        items_data = []
-        total = 0
-        
-        for cart_item in cart_items:
-            item_data = {
-                'product_id': cart_item.product.id,
-                'quantity': cart_item.quantity,
-                'price': cart_item.product.price
-            }
-            items_data.append(item_data)
-            total += cart_item.product.price * cart_item.quantity
-        
-        # Generate order ID (you might want to use a more sophisticated method)
-        import uuid
-        order_id = f"ORD{str(uuid.uuid4())[:8].upper()}"
-        
-        order_data = {
-            'id': order_id,
-            'shipping_address': shipping_address_id,
-            'status': 'pending',
-            'items': items_data
-        }
-        
-        # Create order using serializer
-        serializer = OrderCreateSerializer(data=order_data, context={'request': request})
-        if serializer.is_valid():
-            order = serializer.save()
-            
-            # Clear the cart after successful order creation
-            cart_items.delete()
-            
-            # Return the created order with proper format
-            response_serializer = OrderSerializer(order)
-            return Response(response_serializer.data, status=status.HTTP_201_CREATED)
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-            
-    except Exception as e:
-        return Response(
-            {'error': f'Failed to create order: {str(e)}'}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
 
 @api_view(['PATCH'])
 @permission_classes([permissions.IsAuthenticated])

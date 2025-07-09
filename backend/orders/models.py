@@ -9,7 +9,8 @@ class Order(models.Model):
         ('pending', 'Pending'),
         ('processing', 'Processing'),
         ('shipped', 'Shipped'),
-        ('completed', 'Completed')
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled')
     ]
     
     SHIPPING_METHOD_CHOICES = [
