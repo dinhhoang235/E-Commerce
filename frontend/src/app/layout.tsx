@@ -2,9 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import { Header } from "@/components/header"
-import { Footer } from "@/components/footer"
-// import { CartProvider } from "@/components/cart-provider"
+import { CartProvider } from "@/components/cart-provider"
 import { AuthProvider } from "@/components/auth-provider"
 import { Toaster } from "@/components/ui/toaster"
 import { LayoutWrapper } from "@/components/layout-wrapper"
@@ -28,10 +26,10 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <AuthProvider>
-          {/* <CartProvider> */}
+          <CartProvider>
             <LayoutWrapper>{children}</LayoutWrapper>
             <Toaster />
-          {/* </CartProvider> */}
+          </CartProvider>
         </AuthProvider>
       </body>
     </html>
