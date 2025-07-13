@@ -178,6 +178,7 @@ export default function ProductsPage() {
       
       addItem({
         id: parseInt(String(product.id)) || 0,  // Convert to string first, then to number, fallback to 0
+        productId: parseInt(String(product.id)) || 0,  // Add productId property required by cart provider
         name: product.name || "Unknown Product",
         price: product.price || 0,
         image: product.image || "/placeholder.svg",  // Provide a default image

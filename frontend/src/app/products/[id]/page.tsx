@@ -55,6 +55,7 @@ export default function ProductPage() {
   const [selectedColor, setSelectedColor] = useState<string>("")
   const [selectedStorage, setSelectedStorage] = useState<string>("")
   const [quantity, setQuantity] = useState(1)
+  const [addingToCart, setAddingToCart] = useState(false)
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -104,6 +105,30 @@ export default function ProductPage() {
     fetchProduct()
   }, [params.id])
 
+  const handleAddToCart = async () => {
+    if (!product) return
+
+    try {
+      setAddingToCart(true)
+      await addItem({
+        id: Number(product.id),
+        productId: Number(product.id),
+        name: product.name,
+        price: product.price,
+        image: product.image || '',
+        color: selectedColor,
+        storage: selectedStorage,
+      })
+      // Optional: Show success message or redirect
+      alert('Item added to cart successfully!')
+    } catch (error) {
+      console.error('Failed to add item to cart:', error)
+      alert('Failed to add item to cart. Please try again.')
+    } finally {
+      setAddingToCart(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-16 flex justify-center">
@@ -146,15 +171,6 @@ export default function ProductPage() {
         </Button>
       </div>
     )
-  }
-
-  const handleAddToCart = () => {
-    addItem({
-      id: parseInt(String(product.id)) || 0, // Ensure ID is a number, fallback to 0 if parsing fails
-      name: product.name || "Unknown Product",
-      price: product.price || 0,
-      image: product.image || "/placeholder.svg",
-    })
   }
 
   return (
@@ -297,8 +313,8 @@ export default function ProductPage() {
 
           {/* Add to Cart and Wishlist */}
           <div className="flex flex-col sm:flex-row gap-4 pt-4">
-            <Button size="lg" className="bg-blue-600 hover:bg-blue-700 flex-1" onClick={handleAddToCart}>
-              <ShoppingCart className="mr-2 h-5 w-5" /> Add to Cart
+            <Button size="lg" className="bg-blue-600 hover:bg-blue-700 flex-1" onClick={handleAddToCart} disabled={addingToCart}>
+              {addingToCart ? "Adding to Cart..." : <><ShoppingCart className="mr-2 h-5 w-5" /> Add to Cart</>}
             </Button>
             <Button size="lg" variant="outline" className="flex-1">
               <Heart className="mr-2 h-5 w-5" /> Add to Wishlist

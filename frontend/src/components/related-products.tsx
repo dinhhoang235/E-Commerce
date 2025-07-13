@@ -149,6 +149,7 @@ export function RelatedProducts({ currentProductId, category }: RelatedProductsP
                     onClick={() =>
                       addItem({
                         id: parseInt(String(product.id)) || 0,
+                        productId: parseInt(String(product.id)) || 0,
                         name: product.name,
                         price: product.price,
                         image: product.image || "/placeholder.svg",

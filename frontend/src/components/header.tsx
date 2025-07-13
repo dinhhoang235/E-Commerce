@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Search, ShoppingCart, Menu, Heart, LogOut, Settings, Package } from "lucide-react"
-// import { useCart } from "@/components/cart-provider"
+import { useCart } from "@/components/cart-provider"
 import { useAuth } from "@/components/auth-provider"
 // import { SearchDropdown } from "@/components/search-dropdown"
 
@@ -28,10 +28,10 @@ export function Header() {
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
   const [mobileSearchQuery, setMobileSearchQuery] = useState("")
   const [isMobileSearchDropdownOpen, setIsMobileSearchDropdownOpen] = useState(false)
-//   const { items } = useCart()
+  const { items } = useCart()
   const { user, logout } = useAuth()
   const router = useRouter()
-//   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0)
+  const itemCount = items.reduce((sum, item) => sum + item.quantity, 0)
   const searchRef = useRef<HTMLDivElement>(null)
   const mobileSearchRef = useRef<HTMLDivElement>(null)
 
@@ -226,7 +226,7 @@ export function Header() {
             )}
 
             {/* Cart */}
-            {/* <Sheet>
+            <Sheet>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" className="relative">
                   <ShoppingCart className="w-5 h-5" />
@@ -268,7 +268,7 @@ export function Header() {
                   )}
                 </div>
               </SheetContent>
-            </Sheet> */}
+            </Sheet>
 
             {/* Mobile Menu */}
             <Sheet>

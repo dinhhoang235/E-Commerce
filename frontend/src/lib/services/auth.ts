@@ -87,6 +87,35 @@ export async function updateAddress(addressData: any): Promise<any> {
   return res.data
 }
 
+// Create address
+export async function createAddress(addressData: any): Promise<any> {
+  try {
+    // Map country names to country codes if needed
+    const countryMapping: Record<string, string> = {
+      'Vietnam': 'VN',
+      'United States': 'US',
+      'Japan': 'JP',
+      'VN': 'VN',
+      'US': 'US', 
+      'JP': 'JP'
+    }
+    
+    // Ensure country is in the correct format
+    const processedData = {
+      ...addressData,
+      country: countryMapping[addressData.country] || addressData.country || 'VN'
+    }
+    
+    console.log('Sending address data:', processedData)
+    const res = await api.post("/addresses/", processedData)
+    return res.data
+  } catch (error: any) {
+    // Log the detailed error for debugging
+    console.error('Create address error:', error.response?.data)
+    throw error
+  }
+}
+
 // change password
 export async function changePassword(oldPassword: string, newPassword: string, confirmPassword: string): Promise<void> {
     await api.post("/users/change_password/", {

@@ -32,7 +32,8 @@ import {
   checkUsernameAvailability, 
   checkEmailAvailability, 
   changePassword,
-  updateAddress 
+  updateAddress,
+  createAddress 
 } from "@/lib/services/auth"
 
 export default function AccountPage() {
@@ -273,27 +274,69 @@ export default function AccountPage() {
   }
 
   const handleSaveAddress = async () => {
-    try {
-      // Update user context with real API call
-      await updateUser({
-        address: {
-          address_line1: addressData.address_line1,
-          city: addressData.city,
-          state: addressData.state,
-          zip_code: addressData.zip_code,
-          country: addressData.country,
-        },
-      })
+    if (!user) return
 
+    // Validate required fields
+    const requiredFields = ['address_line1', 'city', 'state', 'zip_code', 'country']
+    const missingFields = requiredFields.filter(field => !addressData[field as keyof typeof addressData]?.trim())
+    
+    if (missingFields.length > 0) {
       toast({
-        title: "Address updated",
-        description: "Your address has been saved successfully.",
+        title: "Validation Error",
+        description: `Please fill in all required fields: ${missingFields.join(', ')}`,
+        variant: "destructive",
       })
+      return
+    }
+
+    try {
+      // Check if user has an existing address
+      const hasExistingAddress = user.address && user.address.id
+
+      if (hasExistingAddress) {
+        // Update existing address
+        await updateAddress(addressData)
+        
+        // Update user context
+        await updateUser({
+          address: {
+            ...user.address,
+            address_line1: addressData.address_line1,
+            city: addressData.city,
+            state: addressData.state,
+            zip_code: addressData.zip_code,
+            country: addressData.country,
+          },
+        })
+
+        toast({
+          title: "Address updated",
+          description: "Your address has been updated successfully.",
+        })
+      } else {
+        // Create new address with default country if not provided
+        const addressToCreate = {
+          ...addressData,
+          country: addressData.country || 'VN', // Default to Vietnam country code
+        }
+        
+        const newAddress = await createAddress(addressToCreate)
+        
+        // Update user context with the new address
+        await updateUser({
+          address: newAddress,
+        })
+
+        toast({
+          title: "Address created",
+          description: "Your address has been created successfully.",
+        })
+      }
     } catch (error) {
-      console.error('Failed to update address:', error)
+      console.error('Failed to save address:', error)
       toast({
         title: "Error",
-        description: "Failed to update address. Please try again.",
+        description: "Failed to save address. Please try again.",
         variant: "destructive",
       })
     }
@@ -638,12 +681,17 @@ export default function AccountPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="country">Country</Label>
-                    <Input
+                    <select
                       id="country"
                       value={addressData.country}
                       onChange={(e) => setAddressData((prev) => ({ ...prev, country: e.target.value }))}
-                      placeholder="United States"
-                    />
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="">Select a country</option>
+                      <option value="VN">Vietnam</option>
+                      <option value="US">United States</option>
+                      <option value="JP">Japan</option>
+                    </select>
                   </div>
                 </div>
 
