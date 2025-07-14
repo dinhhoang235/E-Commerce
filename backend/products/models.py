@@ -63,6 +63,37 @@ class Product(models.Model):
     def __str__(self):
         return self.name
     
+    def update_rating_and_review_count(self):
+        """
+        Calculate and update the average rating and review count based on actual reviews.
+        This method should be called whenever a review is added, updated, or deleted.
+        """
+        from django.db.models import Avg, Count
+        
+        # Import here to avoid circular imports
+        try:
+            from reviews.models import Review
+            
+            # Get all reviews for this product
+            review_data = Review.objects.filter(product=self).aggregate(
+                avg_rating=Avg('rating'),
+                review_count=Count('id')
+            )
+            
+            # Update the product fields
+            self.rating = round(review_data['avg_rating'], 1) if review_data['avg_rating'] else 0.0
+            self.reviews = review_data['review_count'] or 0
+            
+            # Save without calling the full save method to avoid image processing
+            Product.objects.filter(id=self.id).update(
+                rating=self.rating,
+                reviews=self.reviews
+            )
+            
+        except ImportError:
+            # If reviews app is not available, keep current values
+            pass
+    
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
 

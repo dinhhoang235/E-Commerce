@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ShoppingCart, Star, X } from "lucide-react"
 import { useCart } from "@/components/cart-provider"
 import { getAllProducts } from "@/lib/services/products"
+import { StarRating } from "@/components/star-rating"
 
 // Define Category interface
 interface Category {
@@ -356,16 +357,7 @@ export default function ProductsPage() {
                 <p className="text-sm text-slate-600 line-clamp-2 min-h-[2.5rem] flex-1">{product.description}</p>
                 <div className="space-y-3 mt-auto">
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center">
-                      {[...Array(5)].map((_, i) => (
-                        <Star
-                          key={i}
-                          className={`w-4 h-4 ${
-                            i < Math.floor(product.rating) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"
-                          }`}
-                        />
-                      ))}
-                    </div>
+                    <StarRating rating={product.rating} size="md" />
                     <span className="text-sm text-slate-600">({product.reviews})</span>
                   </div>
                   <div className="flex items-center gap-2">

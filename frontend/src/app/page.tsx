@@ -9,6 +9,7 @@ import { ShoppingCart, Star, Truck, Shield, Headphones, Loader2 } from "lucide-r
 import { useCart } from "@/components/cart-provider"
 import { getAllProducts } from "@/lib/services/products"
 import { getAllCategories } from "@/lib/services/categories"
+import { StarRating } from "@/components/star-rating"
 
 // Define interfaces for API data
 interface Category {
@@ -299,16 +300,7 @@ export default function HomePage() {
                         </h3>
                       </Link>
                       <div className="flex items-center gap-2">
-                        <div className="flex items-center">
-                          {[...Array(5)].map((_, i) => (
-                            <Star
-                              key={i}
-                              className={`w-4 h-4 ${
-                                i < Math.floor(product.rating) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"
-                              }`}
-                            />
-                          ))}
-                        </div>
+                        <StarRating rating={product.rating} size="md" />
                         <span className="text-sm text-slate-600 font-medium">({product.reviews || 0})</span>
                       </div>
                       <div className="flex items-center gap-3">

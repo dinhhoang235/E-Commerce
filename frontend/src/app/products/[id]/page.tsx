@@ -13,7 +13,9 @@ import { ProductGallery } from "@/components/product-gallery"
 import { ProductSpecs } from "@/components/product-specs"
 import { RelatedProducts } from "@/components/related-products"
 import { getAllProducts } from "@/lib/services/products"
-
+import { WriteReviewDialog } from "@/components/write-review-dialog"
+import { ReviewList } from "@/components/review-list"
+import { StarRating } from "@/components/star-rating"
 // Define Category interface
 interface Category {
   id: string | number
@@ -56,6 +58,35 @@ export default function ProductPage() {
   const [selectedStorage, setSelectedStorage] = useState<string>("")
   const [quantity, setQuantity] = useState(1)
   const [addingToCart, setAddingToCart] = useState(false)
+  const [reviewRefreshTrigger, setReviewRefreshTrigger] = useState(0)
+
+  const refreshProductData = async () => {
+    try {
+      const productId = params.id as string
+      const response = await getAllProducts()
+      
+      let productsArray: Product[] = [];
+      
+      if (response && response.results && Array.isArray(response.results)) {
+        productsArray = response.results;
+      } else if (Array.isArray(response)) {
+        productsArray = response;
+      }
+      
+      const foundProduct = productsArray.find((p: Product) => String(p.id) === String(productId))
+      if (foundProduct) {
+        setProduct(foundProduct)
+      }
+    } catch (err) {
+      console.error("Error refreshing product data:", err)
+    }
+  }
+
+  const handleReviewChange = () => {
+    setReviewRefreshTrigger(prev => prev + 1)
+    // Also refresh product data to get updated rating and review count
+    refreshProductData()
+  }
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -217,16 +248,7 @@ export default function ProductPage() {
 
             {/* Rating */}
             <div className="flex items-center gap-2 mt-2">
-              <div className="flex items-center">
-                {[...Array(5)].map((_, i) => (
-                  <Star
-                    key={i}
-                    className={`w-4 h-4 ${
-                      i < Math.floor(product.rating) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"
-                    }`}
-                  />
-                ))}
-              </div>
+              <StarRating rating={product.rating} size="md" />
               <span className="text-sm text-slate-600">
                 {product.rating} ({product.reviews} reviews)
               </span>
@@ -382,68 +404,22 @@ export default function ProductPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-2xl font-bold">{product.rating} out of 5</h3>
-                  <div className="flex items-center mt-1">
-                    {[...Array(5)].map((_, i) => (
-                      <Star
-                        key={i}
-                        className={`w-5 h-5 ${
-                          i < Math.floor(product.rating) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"
-                        }`}
-                      />
-                    ))}
-                  </div>
+                  <StarRating rating={product.rating} size="lg" />
                   <p className="text-sm text-slate-600 mt-1">Based on {product.reviews} reviews</p>
                 </div>
-                <Button>Write a Review</Button>
+                <WriteReviewDialog 
+                  productId={Number(product.id)} 
+                  productName={product.name}
+                  onReviewSubmitted={handleReviewChange}
+                />
               </div>
 
               <Separator />
 
-              {/* Sample Reviews */}
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold">Amazing Product!</h4>
-                    <div className="flex">
-                      {[...Array(5)].map((_, i) => (
-                        <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                      ))}
-                    </div>
-                  </div>
-                  <p className="text-sm text-slate-600">By John D. on May 15, 2024</p>
-                  <p>
-                    This is the best {typeof product.category === 'object' ? product.category.name : product.category} I've ever owned. The performance is incredible and the design is
-                    beautiful.
-                  </p>
-                </div>
-
-                <Separator />
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold">Great Value</h4>
-                    <div className="flex">
-                      {[...Array(4)].map((_, i) => (
-                        <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                      ))}
-                      {[...Array(1)].map((_, i) => (
-                        <Star key={i} className="w-4 h-4 text-slate-300" />
-                      ))}
-                    </div>
-                  </div>
-                  <p className="text-sm text-slate-600">By Sarah M. on April 28, 2024</p>
-                  <p>
-                    Really happy with my purchase. The {product.name} has exceeded my expectations in terms of
-                    performance.
-                  </p>
-                </div>
-
-                <Separator />
-
-                <div className="text-center">
-                  <Button variant="outline">Load More Reviews</Button>
-                </div>
-              </div>
+              <ReviewList 
+                productId={Number(product.id)} 
+                refreshTrigger={reviewRefreshTrigger}
+              />
             </div>
           </TabsContent>
         </Tabs>

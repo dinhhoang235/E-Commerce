@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Star, ShoppingCart } from "lucide-react"
 import { useCart } from "@/components/cart-provider"
 import { getAllProducts } from "@/lib/services/products"
+import { StarRating } from "@/components/star-rating"
 
 // Define Category interface
 interface Category {
@@ -123,16 +124,7 @@ export function RelatedProducts({ currentProductId, category }: RelatedProductsP
                   <h3 className="font-medium line-clamp-2">{product.name}</h3>
                 </Link>
                 <div className="flex items-center gap-1">
-                  <div className="flex">
-                    {[...Array(5)].map((_, i) => (
-                      <Star
-                        key={i}
-                        className={`w-3 h-3 ${
-                          i < Math.floor(product.rating) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"
-                        }`}
-                      />
-                    ))}
-                  </div>
+                  <StarRating rating={product.rating} size="sm" />
                   <span className="text-xs text-slate-600">({product.reviews})</span>
                 </div>
                 <div className="flex items-center justify-between">
