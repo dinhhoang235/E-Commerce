@@ -8,13 +8,15 @@ from .views import (
     ConversionRateView,
     AnalyticsDashboardView,
     StoreSettingsView,
-    StoreSettingsPartialView
+    StoreSettingsPartialView,
+    ProductStatsView
 )
 
 urlpatterns = [
     path("login/", AdminLoginView.as_view(), name="admin-login"),
     path("analytics/sales/", SalesAnalyticsView.as_view(), name="admin-analytics-sales"),
     path("analytics/products/", TopProductsView.as_view(), name="admin-analytics-products"),
+    path("analytics/products/<int:product_id>/", ProductStatsView.as_view(), name="admin-product-stats"),
     path("analytics/customers/", CustomerMetricsView.as_view(), name="admin-analytics-customers"),
     path("analytics/traffic/", TrafficSourcesView.as_view(), name="admin-analytics-traffic"),
     path("analytics/conversion/", ConversionRateView.as_view(), name="admin-analytics-conversion"),

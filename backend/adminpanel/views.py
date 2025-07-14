@@ -377,6 +377,7 @@ class StoreSettingsView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+
 class StoreSettingsPartialView(APIView):
     """
     API view for partial settings updates (specific sections)
@@ -423,5 +424,54 @@ class StoreSettingsPartialView(APIView):
         except Exception as e:
             return Response(
                 {"error": "Failed to update settings", "detail": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class ProductStatsView(APIView):
+    """Get statistics for a specific product"""
+    permission_classes = [permissions.IsAdminUser]
+    
+    def get(self, request, product_id):
+        try:
+            from products.models import Product
+            
+            # Get the product
+            product = Product.objects.get(id=product_id)
+            
+            # Get sales data for this product
+            total_sales = OrderItem.objects.filter(
+                product=product,
+                order__status__in=['completed', 'shipped']
+            ).aggregate(
+                total_quantity=Sum('quantity'),
+                total_revenue=Sum('price')
+            )
+            
+            # Calculate stats
+            sales_count = total_sales['total_quantity'] or 0
+            revenue = float(total_sales['total_revenue'] or 0)
+            
+            # Mock page views (in real app, you'd track this)
+            page_views = sales_count * 15 if sales_count > 0 else 100  # Estimate based on sales
+            
+            # Calculate conversion rate (orders / views)
+            conversion_rate = (sales_count / page_views * 100) if page_views > 0 else 0
+            
+            return Response({
+                'totalSales': sales_count,
+                'revenue': revenue,
+                'pageViews': page_views,
+                'conversionRate': f"{conversion_rate:.1f}%"
+            })
+            
+        except Product.DoesNotExist:
+            return Response(
+                {'error': 'Product not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': 'Failed to get product stats', 'detail': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

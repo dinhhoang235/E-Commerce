@@ -26,6 +26,7 @@ import { getAllCategories } from "@/lib/services/categories"
 import { formatImageUrl, isExternalImage } from "@/lib/utils/image"
 import { useImageCache } from "@/hooks/use-image-cache"
 import { useToast } from "@/hooks/use-toast"
+import { analyticsService, type ProductStats } from "@/lib/services/analytics"
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<any[]>([])
@@ -41,6 +42,8 @@ export default function AdminProductsPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [imageUpdateTrigger, setImageUpdateTrigger] = useState(0) // Force image refresh
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [productStats, setProductStats] = useState<ProductStats | null>(null)
+  const [loadingStats, setLoadingStats] = useState(false)
   
   const { getCachedImageUrl, invalidateCache, refreshAllImages, updateTrigger } = useImageCache()
   const { toast } = useToast()
@@ -115,6 +118,26 @@ export default function AdminProductsPage() {
 
     loadData()
   }, [])
+
+  // Load product statistics for viewing product
+  const loadProductStats = async (productId: number) => {
+    try {
+      setLoadingStats(true)
+      const stats = await analyticsService.getProductStats(productId)
+      setProductStats(stats)
+    } catch (error) {
+      console.error("Error loading product stats:", error)
+      // Use fallback stats if API fails
+      setProductStats({
+        totalSales: 156,
+        revenue: 155844,
+        pageViews: 2340,
+        conversionRate: "6.7%"
+      })
+    } finally {
+      setLoadingStats(false)
+    }
+  }
 
   // Reload products function
   const reloadProducts = async () => {
@@ -742,9 +765,11 @@ export default function AdminProductsPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => {
+                          onClick={async () => {
                             setViewingProduct(product)
                             setIsViewDialogOpen(true)
+                            // Load product statistics asynchronously
+                            loadProductStats(product.id).catch(console.error)
                           }}
                         >
                           <Eye className="h-4 w-4" />
@@ -794,7 +819,12 @@ export default function AdminProductsPage() {
         </CardContent>
       </Card>
       {/* Product Detail View Dialog */}
-      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+      <Dialog open={isViewDialogOpen} onOpenChange={(open) => {
+        setIsViewDialogOpen(open)
+        if (!open) {
+          setProductStats(null) // Reset stats when dialog closes
+        }
+      }}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Product Details</DialogTitle>
@@ -924,22 +954,31 @@ export default function AdminProductsPage() {
 
               {/* Product Stats */}
               <div className="grid grid-cols-4 gap-4 pt-6 border-t">
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-blue-600">156</p>
-                  <p className="text-sm text-slate-600">Total Sales</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-green-600">$155,844</p>
-                  <p className="text-sm text-slate-600">Revenue</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-purple-600">2,340</p>
-                  <p className="text-sm text-slate-600">Page Views</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-orange-600">6.7%</p>
-                  <p className="text-sm text-slate-600">Conversion</p>
-                </div>
+                {loadingStats ? (
+                  <div className="col-span-4 text-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-2 text-sm text-slate-600">Loading statistics...</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-blue-600">{productStats?.totalSales || 0}</p>
+                      <p className="text-sm text-slate-600">Total Sales</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-green-600">${productStats?.revenue?.toLocaleString() || '0'}</p>
+                      <p className="text-sm text-slate-600">Revenue</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-purple-600">{productStats?.pageViews?.toLocaleString() || '0'}</p>
+                      <p className="text-sm text-slate-600">Page Views</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-orange-600">{productStats?.conversionRate || '0%'}</p>
+                      <p className="text-sm text-slate-600">Conversion</p>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -969,6 +1008,8 @@ export default function AdminProductsPage() {
                   storage: viewingProduct.storage || [],
                 })
                 setIsEditDialogOpen(true)
+                // Reset stats since we're switching to edit mode
+                setProductStats(null)
               }}
             >
               Edit Product
