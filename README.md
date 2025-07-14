@@ -1,162 +1,242 @@
 # E-Commerce Platform
 
-A full-stack e-commerce application built with Django REST Framework backend and designed for a React frontend.
+A full-stack e-commerce application built with Django REST Framework backend and Next.js frontend, containerized with Docker.
 
-## Features
+## 🚀 Features
 
-### User Management
-- User registration and authentication with JWT tokens
-- User profile management
-- Multiple shipping addresses management
-- Password change functionality
+### Backend (Django REST Framework)
+- **User Management**: Custom user profiles with authentication and authorization
+- **Product Catalog**: Product and category management with image uploads
+- **Shopping Cart**: Add, remove, and manage cart items
+- **Order Management**: Complete order processing and tracking
+- **Admin Panel**: Administrative interface for managing all aspects
+- **Review System**: Product reviews and ratings
+- **JWT Authentication**: Secure token-based authentication
+- **API Documentation**: RESTful API with filtering and pagination
 
-### Product Management
-- Product catalog with categories
-- Product search and filtering by price, rating, and category
-- Product reviews and ratings
-- Product images with automatic thumbnail generation
+### Frontend (Next.js)
+- **Modern UI**: Built with Radix UI components and Tailwind CSS
+- **Responsive Design**: Mobile-first responsive design
+- **User Authentication**: Login, registration, and user account management
+- **Product Browsing**: Browse products by categories with search and filtering
+- **Shopping Cart**: Interactive shopping cart with real-time updates
+- **Checkout Process**: Complete checkout flow with order confirmation
+- **Admin Dashboard**: Administrative interface for managing products and orders
+- **Dark/Light Theme**: Theme switching support
 
-### Shopping Experience
-- Shopping cart functionality (add, update, remove items)
-- Order creation and tracking
-- Shipping address selection for orders
-
-### Admin Features
-- Admin dashboard for product management
-- Order status management
-- User management
-
-## Tech Stack
+## 🛠 Technology Stack
 
 ### Backend
-- **Framework**: Django 5.1.2, Django REST Framework 3.14.0
+- **Framework**: Django 5.1.2
+- **API**: Django REST Framework 3.14.0
 - **Database**: MySQL 8.0
-- **Authentication**: JWT with Simple JWT
-- **Image Processing**: Pillow 10.2.0
-- **Filtering**: django-filter 25.1
+- **Authentication**: JWT (djangorestframework-simplejwt)
+- **Image Processing**: Pillow
+- **CORS**: django-cors-headers
+- **Environment**: python-dotenv
 
 ### Frontend
-- **Framework**: React (to be implemented)
+- **Framework**: Next.js 15.2.4
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS
+- **UI Components**: Radix UI
+- **HTTP Client**: Axios
+- **Forms**: React Hook Form
+- **Icons**: Lucide React
+- **Carousel**: Embla Carousel
 
-### Deployment
-- **Containerization**: Docker and Docker Compose
+### Infrastructure
+- **Containerization**: Docker & Docker Compose
+- **Database**: MySQL 8.0
+- **Development**: Hot reloading for both frontend and backend
 
-## Project Structure
+## 📋 Prerequisites
 
-```
-E_commerce/
-├── backend/
-│   ├── backend/            # Main Django project settings
-│   ├── users/              # User management app
-│   ├── products/           # Product catalog app
-│   ├── cart/               # Shopping cart app
-│   ├── orders/             # Order processing app
-│   ├── media/              # Uploaded product images
-│   ├── static/             # Static files
-│   ├── requirements.txt    # Python dependencies
-│   ├── Dockerfile          # Backend container config
-│   └── entrypoint.sh       # Container startup script
-├── frontend/               # React frontend (to be implemented)
-├── docker-compose.yml      # Docker compose configuration
-├── .env                    # Environment variables
-└── README.md               # Project documentation
-```
-
-## API Endpoints
-
-### Authentication
-- `POST /api/register/`: User registration
-- `POST /api/login/`: User login
-- `POST /api/logout/`: User logout
-- `POST /api/token/`: Obtain JWT token
-- `POST /api/token/refresh/`: Refresh JWT token
-- `POST /api/token/verify/`: Verify JWT token
-
-### User Management
-- `GET /api/profile/`: Get user profile
-- `PUT /api/profile/`: Update user profile
-- `POST /api/password/change_password/`: Change password
-- `GET, POST /api/address/`: List and create shipping addresses
-- `GET, PUT, DELETE /api/address/{id}/`: Manage specific shipping address
-- `POST /api/address/{id}/set_default/`: Set default shipping address
-
-### Products
-- `GET /api/categories/`: List all categories
-- `GET /api/products/`: List all products with filtering options
-- `GET /api/products/{id}/`: Get product details
-- `GET /api/reviews/?product={id}`: Get reviews for a product
-- `POST /api/reviews/`: Add a new product review
-
-### Cart
-- `GET /api/cart/view/`: View current cart
-- `POST /api/cart/add/`: Add product to cart
-- `PATCH /api/cart/update_item/`: Update cart item quantity
-- `DELETE /api/cart/remove-item/`: Remove item from cart
-- `DELETE /api/cart/clear/`: Clear entire cart
-
-### Orders
-- `GET /api/orders/`: List user's orders
-- `POST /api/orders/`: Create a new order
-- `GET /api/orders/{id}/`: Get order details
-- `POST /api/orders/{id}/add_item/`: Add item to an existing order
-- `PATCH /api/orders/{id}/update_status/`: Update order status (admin only)
-- `GET /api/orders/shipping_addresses/`: Get user's shipping addresses for checkout
-
-## Installation and Setup
-
-### Prerequisites
 - Docker and Docker Compose
-- MySQL
+- Git
 
-### Environment Configuration
-Create a `.env` file with the following variables:
+## 🚀 Quick Start
+
+### 1. Clone the Repository
+```bash
+git clone <repository-url>
+cd E-Commerce
 ```
-# Django settings
+
+### 2. Environment Setup
+Create a `.env` file in the root directory:
+```env
+# Database Configuration
+MYSQL_ROOT_PASSWORD=rootpassword
+MYSQL_DATABASE=ecommerce_db
+MYSQL_USER=ecommerce_user
+MYSQL_PASSWORD=ecommerce_password
+
+# Django Configuration
+SECRET_KEY=your-secret-key-here
 DEBUG=True
-SECRET_KEY=your_secret_key
 ALLOWED_HOSTS=localhost,127.0.0.1
 
-# Database settings
-DB_ENGINE=django.db.backends.mysql
-DB_NAME=e_commerce
-DB_USER=admin
-DB_PASSWORD=admin123
-DB_HOST=db
-DB_PORT=3306
-
-# Database Configuration
-MYSQL_ROOT_PASSWORD=admin123
-MYSQL_DATABASE=e_commerce
-MYSQL_USER=admin
-MYSQL_PASSWORD=admin123
-
-# Backend Configuration
-DJANGO_PORT=8000
-
 # Frontend Configuration
-REACT_APP_API_URL=http://localhost:3000/api
+NEXT_PUBLIC_API_URL=http://localhost:8000/api
+NEXT_PUBLIC_WS_HOST=localhost:8000
 ```
 
-### Running with Docker
-1. Clone the repository
-2. Set up your `.env` file
-3. Run `docker-compose up -d`
-4. Access the backend at http://localhost:8000
+### 3. Start the Application
+```bash
+# Build and start all services
+docker-compose up --build
 
-### Development Setup
-1. Start the database: `docker-compose up -d db`
-2. Install backend dependencies: `pip install -r backend/requirements.txt`
-3. Run migrations: `python backend/manage.py migrate`
-4. Create superuser: `python backend/setup_project.py`
-5. Start backend server: `python backend/manage.py runserver`
+# Or run in detached mode
+docker-compose up -d --build
+```
 
-## Access
-- Admin interface: http://localhost:8000/admin
-- API: http://localhost:8000/api/
+### 4. Initial Setup
+The application will automatically:
+- Set up the MySQL database
+- Run Django migrations
+- Create a superuser account (admin/admin123)
 
-## Future Development
-- Integration with payment gateways
-- Implementation of React frontend
-- Product recommendations
-- Email notifications
-- Order tracking
+## 📱 Access the Application
+
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000/api
+- **Django Admin**: http://localhost:8000/admin
+- **Database**: localhost:3306
+
+### Default Admin Credentials
+- Username: `admin`
+- Password: `admin123`
+
+## 🏗 Project Structure
+
+```
+E-Commerce/
+├── backend/                    # Django REST API
+│   ├── adminpanel/            # Admin management app
+│   ├── backend/               # Django project settings
+│   ├── cart/                  # Shopping cart functionality
+│   ├── orders/                # Order management
+│   ├── products/              # Product catalog
+│   ├── reviews/               # Product reviews
+│   ├── users/                 # User management
+│   ├── media/                 # User uploads
+│   ├── static/                # Static files
+│   ├── requirements.txt       # Python dependencies
+│   └── manage.py              # Django management script
+├── frontend/                  # Next.js application
+│   ├── src/
+│   │   ├── app/              # App router pages
+│   │   ├── components/       # Reusable components
+│   │   ├── hooks/            # Custom React hooks
+│   │   └── lib/              # Utility functions
+│   ├── public/               # Static assets
+│   └── package.json          # Node dependencies
+├── docker-compose.yml        # Multi-container setup
+└── README.md                 # Project documentation
+```
+
+## 🔧 Development
+
+### Backend Development
+```bash
+# Access backend container
+docker-compose exec backend bash
+
+# Create migrations
+python manage.py makemigrations
+
+# Run migrations
+python manage.py migrate
+
+# Create superuser
+python manage.py createsuperuser
+
+# Collect static files
+python manage.py collectstatic
+```
+
+### Frontend Development
+```bash
+# Access frontend container
+docker-compose exec frontend bash
+
+# Install new packages
+npm install <package-name>
+
+# Run linting
+npm run lint
+
+# Build for production
+npm run build
+```
+
+## 📊 API Endpoints
+
+### Authentication
+- `POST /api/auth/login/` - User login
+- `POST /api/auth/register/` - User registration
+- `POST /api/auth/refresh/` - Refresh JWT token
+
+### Products
+- `GET /api/products/` - List products
+- `GET /api/products/{id}/` - Product details
+- `GET /api/categories/` - List categories
+
+### Cart
+- `GET /api/cart/` - Get cart items
+- `POST /api/cart/` - Add to cart
+- `PUT /api/cart/{id}/` - Update cart item
+- `DELETE /api/cart/{id}/` - Remove from cart
+
+### Orders
+- `GET /api/orders/` - List user orders
+- `POST /api/orders/` - Create order
+- `GET /api/orders/{id}/` - Order details
+
+## 🔒 Security Features
+
+- JWT token-based authentication
+- CORS configuration for cross-origin requests
+- Input validation and sanitization
+- Secure file upload handling
+- Environment variable configuration
+
+## 🧪 Testing
+
+```bash
+# Backend tests
+docker-compose exec backend python manage.py test
+
+# Frontend tests
+docker-compose exec frontend npm test
+```
+
+## 📦 Production Deployment
+
+1. Update environment variables for production
+2. Set `DEBUG=False` in Django settings
+3. Configure proper ALLOWED_HOSTS
+4. Set up SSL certificates
+5. Use production database settings
+6. Configure static file serving
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 📞 Support
+
+If you encounter any issues or have questions, please open an issue on GitHub or contact the development team.
+
+---
+
+Built with ❤️ using Django, Next.js, and Docker
