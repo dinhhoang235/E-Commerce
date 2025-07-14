@@ -107,7 +107,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         
         # If no items provided, use cart items
         if not items_data:
-            cart_items = CartItem.objects.filter(user=user)
+            cart_items = CartItem.objects.filter(cart__user=user)
             if not cart_items.exists():
                 raise serializers.ValidationError("No items in cart to create order")
             items_data = [{'product_id': item.product.id, 'quantity': item.quantity} for item in cart_items]
@@ -150,7 +150,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         
         # Clear cart if items were from cart
         if not validated_data.get('items'):
-            CartItem.objects.filter(user=user).delete()
+            CartItem.objects.filter(cart__user=user).delete()
         
         return order
 

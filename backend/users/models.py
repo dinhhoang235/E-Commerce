@@ -7,6 +7,10 @@ from django.templatetags.static import static
 COUNTRY_CHOICES = [
     ("VN", "Vietnam"),
     ("US", "United States"),
+    ("CA", "Canada"),
+    ("GB", "United Kingdom"),
+    ("AU", "Australia"),
+    ("SG", "Singapore"),
     ("JP", "Japan"),
 ]
 

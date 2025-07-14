@@ -268,7 +268,7 @@ export function Header() {
                       ))}
                       <div className="space-y-2 mt-6">
                         <Button className="w-full bg-blue-600 hover:bg-blue-700" asChild>
-                          <Link href="/checkout">Checkout</Link>
+                          <Link href="/checkout" onClick={() => setIsCartOpen(false)}>Checkout</Link>
                         </Button>
                         <Button variant="outline" className="w-full bg-transparent" asChild>
                           <Link href="/cart" onClick={() => setIsCartOpen(false)}>View Cart</Link>

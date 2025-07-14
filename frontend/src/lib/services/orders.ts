@@ -136,7 +136,16 @@ export const userOrdersApi = {
   async getMyOrders(): Promise<Order[]> {
     try {
       const response = await api.get('/orders/')
-      return response.data
+      
+      // Handle both direct array and paginated response
+      if (Array.isArray(response.data)) {
+        return response.data
+      } else if (response.data && Array.isArray(response.data.results)) {
+        return response.data.results
+      } else {
+        console.log("Unexpected API response format:", response.data)
+        return []
+      }
     } catch (error) {
       console.error("Error fetching user orders:", error)
       throw error

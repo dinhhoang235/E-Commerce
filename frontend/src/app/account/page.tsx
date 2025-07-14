@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -24,6 +25,7 @@ import {
   Globe,
   Check,
   X,
+  Loader2,
 } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
 import { useToast } from "@/hooks/use-toast"
@@ -35,6 +37,7 @@ import {
   updateAddress,
   createAddress 
 } from "@/lib/services/auth"
+import { userOrdersApi, type Order } from "@/lib/services/orders"
 
 export default function AccountPage() {
   const { user, logout, updateUser } = useAuth()
@@ -86,6 +89,10 @@ export default function AccountPage() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null)
   const [emailAvailable, setEmailAvailable] = useState<boolean | null>(null)
+  
+  // Orders state
+  const [orders, setOrders] = useState<Order[]>([])
+  const [isLoadingOrders, setIsLoadingOrders] = useState(false)
 
   useEffect(() => {
     if (!user) {
@@ -184,6 +191,56 @@ export default function AccountPage() {
       setPasswordStrength({ score: 0, feedback: "", color: "slate" })
     }
   }, [passwordData.newPassword])
+
+  // Fetch orders when orders tab is accessed
+  const fetchOrders = async () => {
+    try {
+      setIsLoadingOrders(true)
+      const userOrders = await userOrdersApi.getMyOrders()
+      setOrders(userOrders)
+    } catch (error) {
+      console.error("Error fetching orders:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load your orders. Please try again.",
+        variant: "destructive",
+      })
+      setOrders([])
+    } finally {
+      setIsLoadingOrders(false)
+    }
+  }
+
+  // Helper function to get status badge variant for orders
+  const getOrderStatusVariant = (status: string) => {
+    switch (status) {
+      case "completed":
+      case "delivered":
+        return "default"
+      case "processing":
+      case "shipped":
+        return "secondary"
+      case "pending":
+        return "outline"
+      case "cancelled":
+        return "destructive"
+      default:
+        return "secondary"
+    }
+  }
+
+  // Helper function to format status display text
+  const getOrderStatusDisplay = (status: string) => {
+    return status.charAt(0).toUpperCase() + status.slice(1)
+  }
+
+  // Helper function to count items in an order
+  const getOrderItemCount = (order: Order) => {
+    if (order.items && Array.isArray(order.items)) {
+      return order.items.reduce((total, item) => total + item.quantity, 0)
+    }
+    return order.products?.length || 0
+  }
 
   const validateProfileForm = () => {
     const newErrors: Record<string, string> = {}
@@ -426,7 +483,11 @@ export default function AccountPage() {
           <p className="text-slate-600">Manage your account information and preferences</p>
         </div>
 
-        <Tabs defaultValue="profile" className="space-y-6">
+        <Tabs defaultValue="profile" className="space-y-6" onValueChange={(value) => {
+          if (value === "orders" && orders.length === 0 && !isLoadingOrders) {
+            fetchOrders()
+          }
+        }}>
           <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="profile">Profile</TabsTrigger>
             <TabsTrigger value="addresses">Addresses</TabsTrigger>
@@ -690,6 +751,10 @@ export default function AccountPage() {
                       <option value="">Select a country</option>
                       <option value="VN">Vietnam</option>
                       <option value="US">United States</option>
+                      <option value="CA">Canada</option>
+                      <option value="GB">United Kingdom</option>
+                      <option value="AU">Australia</option>
+                      <option value="SG">Singapore</option>
                       <option value="JP">Japan</option>
                     </select>
                   </div>
@@ -1033,19 +1098,87 @@ export default function AccountPage() {
           <TabsContent value="orders">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Package className="mr-2 h-5 w-5" />
-                  Order History
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <Package className="mr-2 h-5 w-5" />
+                    Order History
+                  </div>
+                  {orders.length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={fetchOrders}
+                      disabled={isLoadingOrders}
+                    >
+                      {isLoadingOrders && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Refresh
+                    </Button>
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-8">
-                  <Package className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-                  <p className="text-slate-500 mb-4">No orders yet</p>
-                  <Button variant="outline" asChild>
-                    <a href="/products">Start Shopping</a>
-                  </Button>
-                </div>
+                {isLoadingOrders ? (
+                  <div className="flex justify-center items-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin mr-2" />
+                    <span>Loading your orders...</span>
+                  </div>
+                ) : orders.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Package className="mx-auto h-12 w-12 text-slate-400 mb-4" />
+                    <p className="text-slate-500 mb-4">No orders yet</p>
+                    <Button variant="outline" asChild>
+                      <Link href="/products">Start Shopping</Link>
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {orders.slice(0, 5).map((order) => (
+                      <div key={order.id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-2">
+                            <h3 className="font-medium">Order #{order.id}</h3>
+                            <Badge variant={getOrderStatusVariant(order.status)}>
+                              {getOrderStatusDisplay(order.status)}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-slate-600 mb-1">
+                            Placed on {new Date(order.date).toLocaleDateString()}
+                          </p>
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm text-slate-600">
+                              {getOrderItemCount(order)} item{getOrderItemCount(order) !== 1 ? "s" : ""}
+                            </p>
+                            <p className="font-bold">${parseFloat(order.total).toFixed(2)}</p>
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          <Button variant="outline" size="sm" asChild>
+                            <Link href={`/orders/${order.id}`}>
+                              <Eye className="w-4 h-4 mr-2" />
+                              View Details
+                            </Link>
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {orders.length > 5 && (
+                      <div className="text-center pt-4">
+                        <Button variant="outline" asChild>
+                          <Link href="/orders">View All Orders ({orders.length})</Link>
+                        </Button>
+                      </div>
+                    )}
+                    
+                    {orders.length <= 5 && orders.length > 0 && (
+                      <div className="text-center pt-4">
+                        <Button variant="outline" asChild>
+                          <Link href="/orders">View Order History</Link>
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
