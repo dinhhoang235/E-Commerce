@@ -12,6 +12,15 @@ class CartItemSerializer(serializers.ModelSerializer):
         model = CartItem
         fields = ['id', 'product', 'product_id', 'quantity', 'color', 'storage', 'total_price', 'created_at']
 
+    def to_representation(self, instance):
+        # Get the standard representation
+        representation = super().to_representation(instance)
+        # Pass request context to nested ProductSerializer
+        if self.context.get('request'):
+            product_serializer = ProductSerializer(instance.product, context=self.context)
+            representation['product'] = product_serializer.data
+        return representation
+
     def validate_quantity(self, value):
         if value <= 0:
             raise serializers.ValidationError("Quantity must be greater than 0")

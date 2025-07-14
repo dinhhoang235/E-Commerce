@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -134,11 +133,11 @@ export default function CartPage() {
                   className="flex flex-col sm:flex-row items-start sm:items-center gap-4 pb-6 border-b last:border-0 last:pb-0"
                 >
                   <div className="w-24 h-24 bg-slate-100 rounded-lg flex items-center justify-center">
-                    <Image
+                    <img
                       src={item.image || "/placeholder.svg"}
                       alt={item.name}
-                      width={80}
-                      height={80}
+                      width={100}
+                      height={100}
                       className="object-contain"
                     />
                   </div>

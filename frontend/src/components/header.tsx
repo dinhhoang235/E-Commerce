@@ -28,6 +28,7 @@ export function Header() {
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
   const [mobileSearchQuery, setMobileSearchQuery] = useState("")
   const [isMobileSearchDropdownOpen, setIsMobileSearchDropdownOpen] = useState(false)
+  const [isCartOpen, setIsCartOpen] = useState(false)
   const { items } = useCart()
   const { user, logout } = useAuth()
   const router = useRouter()
@@ -226,7 +227,7 @@ export function Header() {
             )}
 
             {/* Cart */}
-            <Sheet>
+            <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" className="relative">
                   <ShoppingCart className="w-5 h-5" />
@@ -248,7 +249,16 @@ export function Header() {
                     <div className="space-y-4">
                       {items.map((item) => (
                         <div key={item.id} className="flex items-center space-x-4 p-4 border rounded-lg">
-                          <div className="w-16 h-16 bg-slate-100 rounded-lg"></div>
+                          <div className="w-16 h-16 bg-slate-100 rounded-lg overflow-hidden">
+                            <img 
+                              src={item.image || "/placeholder.jpg"} 
+                              alt={item.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.src = "/placeholder.jpg";
+                              }}
+                            />
+                          </div>
                           <div className="flex-1">
                             <h4 className="font-medium">{item.name}</h4>
                             <p className="text-sm text-slate-500">Qty: {item.quantity}</p>
@@ -261,7 +271,7 @@ export function Header() {
                           <Link href="/checkout">Checkout</Link>
                         </Button>
                         <Button variant="outline" className="w-full bg-transparent" asChild>
-                          <Link href="/cart">View Cart</Link>
+                          <Link href="/cart" onClick={() => setIsCartOpen(false)}>View Cart</Link>
                         </Button>
                       </div>
                     </div>

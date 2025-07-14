@@ -19,7 +19,7 @@ class CartViewSet(viewsets.ViewSet):
     def list(self, request):
         """Get user's cart"""
         cart, created = Cart.objects.get_or_create(user=request.user)
-        serializer = CartSerializer(cart)
+        serializer = CartSerializer(cart, context={'request': request})
         return Response(serializer.data)
 
     @action(detail=False, methods=['post'])
@@ -42,7 +42,7 @@ class CartViewSet(viewsets.ViewSet):
                 # Update existing item quantity
                 existing_item.quantity += serializer.validated_data['quantity']
                 existing_item.save()
-                item_serializer = CartItemSerializer(existing_item)
+                item_serializer = CartItemSerializer(existing_item, context={'request': request})
             else:
                 # Create new cart item
                 cart_item = CartItem.objects.create(
@@ -52,7 +52,7 @@ class CartViewSet(viewsets.ViewSet):
                     color=serializer.validated_data.get('color', ''),
                     storage=serializer.validated_data.get('storage', '')
                 )
-                item_serializer = CartItemSerializer(cart_item)
+                item_serializer = CartItemSerializer(cart_item, context={'request': request})
 
             return Response(
                 {
@@ -81,7 +81,7 @@ class CartViewSet(viewsets.ViewSet):
             cart_item.quantity = serializer.validated_data['quantity']
             cart_item.save()
             
-            item_serializer = CartItemSerializer(cart_item)
+            item_serializer = CartItemSerializer(cart_item, context={'request': request})
             return Response(
                 {
                     'message': 'Cart item updated successfully',
