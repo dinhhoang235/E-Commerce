@@ -20,7 +20,7 @@ import {
 import { Search, ShoppingCart, Menu, Heart, LogOut, Settings, Package } from "lucide-react"
 import { useCart } from "@/components/cart-provider"
 import { useAuth } from "@/components/auth-provider"
-// import { SearchDropdown } from "@/components/search-dropdown"
+import { SearchDropdown } from "@/components/search-dropdown"
 
 export function Header() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -148,12 +148,12 @@ export function Header() {
                   }}
                 />
               </form>
-              {/* <SearchDropdown
+              <SearchDropdown
                 query={searchQuery}
                 isOpen={isSearchDropdownOpen}
                 onClose={() => setIsSearchDropdownOpen(false)}
                 onSelect={handleProductSelect}
-              /> */}
+              />
             </div>
           </div>
 
@@ -335,12 +335,12 @@ export function Header() {
                   autoFocus
                 />
               </form>
-              {/* <SearchDropdown
+              <SearchDropdown
                 query={mobileSearchQuery}
                 isOpen={isMobileSearchDropdownOpen}
                 onClose={() => setIsMobileSearchDropdownOpen(false)}
                 onSelect={handleProductSelect}
-              /> */}
+              />
             </div>
           </div>
         )}

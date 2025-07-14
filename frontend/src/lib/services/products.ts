@@ -41,6 +41,24 @@ export async function getAllProducts() {
   }
 }
 
+export async function searchProducts(query: string, limit?: number) {
+  try {
+    const params = new URLSearchParams()
+    if (query.trim()) {
+      params.append('search', query.trim())
+    }
+    if (limit) {
+      params.append('limit', limit.toString())
+    }
+    
+    const response = await api.get(`/products/?${params.toString()}`)
+    return response.data
+  } catch (error) {
+    console.error("Error searching products:", error)
+    throw error
+  }
+}
+
 export async function createProduct(productData: any) {
   try {
     const payload = buildFormDataIfNeeded(productData)
