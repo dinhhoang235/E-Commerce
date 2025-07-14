@@ -331,8 +331,8 @@ export default function ProductsPage() {
       {!isLoading && !error && filteredProducts.length > 0 && (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredProducts.map((product: Product) => (
-          <Card key={product.id} className="group hover:shadow-xl transition-all duration-300">
-            <CardContent className="p-6">
+          <Card key={product.id} className="group hover:shadow-xl transition-all duration-300 h-full flex flex-col">
+            <CardContent className="p-6 flex flex-col h-full">
               <Link href={`/products/${product.id}`} className="block">
                 <div className="relative mb-4">
                   {product.badge && (
@@ -349,34 +349,36 @@ export default function ProductsPage() {
                   </div>
                 </div>
               </Link>
-              <div className="space-y-3">
+              <div className="space-y-3 flex-1 flex flex-col">
                 <Link href={`/products/${product.id}`} className="block">
-                  <h3 className="text-lg font-bold line-clamp-2">{product.name}</h3>
+                  <h3 className="text-lg font-bold line-clamp-2 min-h-[3.5rem]">{product.name}</h3>
                 </Link>
-                <p className="text-sm text-slate-600 line-clamp-2">{product.description}</p>
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center">
-                    {[...Array(5)].map((_, i) => (
-                      <Star
-                        key={i}
-                        className={`w-4 h-4 ${
-                          i < Math.floor(product.rating) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"
-                        }`}
-                      />
-                    ))}
+                <p className="text-sm text-slate-600 line-clamp-2 min-h-[2.5rem] flex-1">{product.description}</p>
+                <div className="space-y-3 mt-auto">
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center">
+                      {[...Array(5)].map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`w-4 h-4 ${
+                            i < Math.floor(product.rating) ? "fill-yellow-400 text-yellow-400" : "text-slate-300"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-sm text-slate-600">({product.reviews})</span>
                   </div>
-                  <span className="text-sm text-slate-600">({product.reviews})</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl font-bold">${product.price}</span>
+                    {product.originalPrice && (
+                      <span className="text-sm text-slate-500 line-through">${product.originalPrice}</span>
+                    )}
+                  </div>
+                  <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={() => handleAddToCart(product)}>
+                    <ShoppingCart className="w-4 h-4 mr-2" />
+                    Add to Cart
+                  </Button>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xl font-bold">${product.price}</span>
-                  {product.originalPrice && (
-                    <span className="text-sm text-slate-500 line-through">${product.originalPrice}</span>
-                  )}
-                </div>
-                <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={() => handleAddToCart(product)}>
-                  <ShoppingCart className="w-4 h-4 mr-2" />
-                  Add to Cart
-                </Button>
               </div>
             </CardContent>
           </Card>
