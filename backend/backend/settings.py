@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     'cart',
     'adminpanel',
     'reviews',
+    'wishlist',
 ]
 
 MIDDLEWARE = [

@@ -26,8 +26,10 @@ import {
   Check,
   X,
   Loader2,
+  Heart,
 } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
+import { WishlistSummary } from "@/components/wishlist-summary"
 import { useToast } from "@/hooks/use-toast"
 import { AvatarUpload } from "@/components/avatar-upload"
 import { 
@@ -488,12 +490,13 @@ export default function AccountPage() {
             fetchOrders()
           }
         }}>
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="profile">Profile</TabsTrigger>
             <TabsTrigger value="addresses">Addresses</TabsTrigger>
             <TabsTrigger value="security">Security</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
             <TabsTrigger value="orders">Orders</TabsTrigger>
+            <TabsTrigger value="wishlist">Wishlist</TabsTrigger>
           </TabsList>
 
           <TabsContent value="profile">
@@ -1179,6 +1182,33 @@ export default function AccountPage() {
                     )}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="wishlist">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Heart className="h-5 w-5 mr-2 text-red-500 fill-current" />
+                  My Wishlist
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  View and manage your saved products
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground mb-4">
+                    Your wishlist items will be displayed here.
+                  </p>
+                  <Link href="/wishlist">
+                    <Button>
+                      <Heart className="h-4 w-4 mr-2" />
+                      View Full Wishlist
+                    </Button>
+                  </Link>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Search, ShoppingCart, Menu, Heart, LogOut, Settings, Package } from "lucide-react"
 import { useCart } from "@/components/cart-provider"
+import { useWishlist } from "@/components/wishlist-provider"
 import { useAuth } from "@/components/auth-provider"
 import { SearchDropdown } from "@/components/search-dropdown"
 
@@ -30,6 +31,7 @@ export function Header() {
   const [isMobileSearchDropdownOpen, setIsMobileSearchDropdownOpen] = useState(false)
   const [isCartOpen, setIsCartOpen] = useState(false)
   const { items } = useCart()
+  const { total: wishlistCount } = useWishlist()
   const { user, logout } = useAuth()
   const router = useRouter()
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0)
@@ -170,9 +172,16 @@ export function Header() {
             </Button>
 
             {/* Wishlist */}
-            <Button variant="ghost" size="icon" className="hidden sm:flex">
-              <Heart className="w-5 h-5" />
-            </Button>
+            <Link href="/wishlist">
+              <Button variant="ghost" size="icon" className="hidden sm:flex relative">
+                <Heart className="w-5 h-5" />
+                {wishlistCount > 0 && (
+                  <Badge className="absolute -right-2 -top-2 h-5 w-5 flex items-center justify-center p-0 text-xs bg-red-500 hover:bg-red-600">
+                    {wishlistCount}
+                  </Badge>
+                )}
+              </Button>
+            </Link>
 
             {/* Account */}
             {user ? (
@@ -304,6 +313,20 @@ export function Header() {
                   <Link href="/products" className="text-lg font-medium">
                     All Products
                   </Link>
+                  {user && (
+                    <>
+                      <hr className="my-4" />
+                      <Link href="/wishlist" className="text-lg font-medium flex items-center">
+                        <Heart className="w-5 h-5 mr-2" />
+                        Wishlist
+                        {wishlistCount > 0 && (
+                          <Badge className="ml-2 bg-red-500 hover:bg-red-600">
+                            {wishlistCount}
+                          </Badge>
+                        )}
+                      </Link>
+                    </>
+                  )}
                   {!user && (
                     <>
                       <hr className="my-4" />

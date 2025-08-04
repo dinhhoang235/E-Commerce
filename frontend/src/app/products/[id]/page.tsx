@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import { ShoppingCart, Heart, Share2, ChevronLeft, Star, Check, Shield, Truck } from "lucide-react"
 import { useCart } from "@/components/cart-provider"
+import { WishlistButton } from "@/components/wishlist-button"
 import { ProductGallery } from "@/components/product-gallery"
 import { ProductSpecs } from "@/components/product-specs"
 import { RelatedProducts } from "@/components/related-products"
@@ -338,9 +339,12 @@ export default function ProductPage() {
             <Button size="lg" className="bg-blue-600 hover:bg-blue-700 flex-1" onClick={handleAddToCart} disabled={addingToCart}>
               {addingToCart ? "Adding to Cart..." : <><ShoppingCart className="mr-2 h-5 w-5" /> Add to Cart</>}
             </Button>
-            <Button size="lg" variant="outline" className="flex-1">
-              <Heart className="mr-2 h-5 w-5" /> Add to Wishlist
-            </Button>
+            <WishlistButton 
+              productId={typeof product.id === 'string' ? parseInt(product.id) : product.id} 
+              variant="default" 
+              size="lg" 
+              className="flex-1"
+            />
           </div>
 
           {/* Delivery and Returns */}

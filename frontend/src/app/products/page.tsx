@@ -9,8 +9,9 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ShoppingCart, Star, X } from "lucide-react"
+import { ShoppingCart, Star, X, Heart } from "lucide-react"
 import { useCart } from "@/components/cart-provider"
+import { WishlistButton } from "@/components/wishlist-button"
 import { getAllProducts } from "@/lib/services/products"
 import { StarRating } from "@/components/star-rating"
 
@@ -88,12 +89,24 @@ export default function ProductsPage() {
     const urlSearch = searchParams.get("search")
     const urlCategory = searchParams.get("category")
 
+    // If there are no URL parameters, clear all filters (user clicked "All Products")
+    if (!urlSearch && !urlCategory) {
+      setSearchTerm("")
+      setSelectedCategory("all")
+      return
+    }
+
+    // Set filters from URL parameters
     if (urlSearch) {
       setSearchTerm(urlSearch)
+    } else {
+      setSearchTerm("") // Clear search if not in URL
     }
 
     if (urlCategory) {
       setSelectedCategory(urlCategory)
+    } else {
+      setSelectedCategory("all") // Reset to all if not in URL
     }
   }, [searchParams])
 
@@ -339,6 +352,13 @@ export default function ProductsPage() {
                   {product.badge && (
                     <Badge className="absolute top-2 left-2 z-10 bg-red-500 hover:bg-red-600">{product.badge}</Badge>
                   )}
+                  <div className="absolute top-2 right-2 z-10">
+                    <WishlistButton 
+                      productId={typeof product.id === 'string' ? parseInt(product.id) : product.id}
+                      variant="icon"
+                      className="bg-white/80 hover:bg-white shadow-md"
+                    />
+                  </div>
                   <div className="relative aspect-square w-full">
                     <Image
                       src={product.image || "/placeholder.svg"}
@@ -366,10 +386,18 @@ export default function ProductsPage() {
                       <span className="text-sm text-slate-500 line-through">${product.originalPrice}</span>
                     )}
                   </div>
-                  <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={() => handleAddToCart(product)}>
-                    <ShoppingCart className="w-4 h-4 mr-2" />
-                    Add to Cart
-                  </Button>
+                  <div className="flex flex-col gap-2">
+                    <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={() => handleAddToCart(product)}>
+                      <ShoppingCart className="w-4 h-4 mr-2" />
+                      Add to Cart
+                    </Button>
+                    <WishlistButton 
+                      productId={typeof product.id === 'string' ? parseInt(product.id) : product.id}
+                      variant="text"
+                      className="w-full justify-center"
+                      showText={true}
+                    />
+                  </div>
                 </div>
               </div>
             </CardContent>

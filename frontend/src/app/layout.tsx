@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { CartProvider } from "@/components/cart-provider"
+import { WishlistProvider } from "@/components/wishlist-provider"
 import { AuthProvider } from "@/components/auth-provider"
 import { Toaster } from "@/components/ui/toaster"
 import { LayoutWrapper } from "@/components/layout-wrapper"
@@ -27,8 +28,10 @@ export default function RootLayout({
       <body className={inter.className}>
         <AuthProvider>
           <CartProvider>
-            <LayoutWrapper>{children}</LayoutWrapper>
-            <Toaster />
+            <WishlistProvider>
+              <LayoutWrapper>{children}</LayoutWrapper>
+              <Toaster />
+            </WishlistProvider>
           </CartProvider>
         </AuthProvider>
       </body>
