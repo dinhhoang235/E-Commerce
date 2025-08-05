@@ -5,6 +5,7 @@ from django.shortcuts import get_object_or_404
 from django.contrib.auth.models import User
 from django.db import models
 from django.db.models import Count, Sum
+from django.core.exceptions import ValidationError
 from .models import Order, OrderItem
 from .serializers import (
     OrderSerializer, 
@@ -13,6 +14,8 @@ from .serializers import (
     AdminOrderSerializer,
     OrderStatusUpdateSerializer
 )
+from .utils import OrderManager
+from products.models import InsufficientStockError
 from cart.models import CartItem
 
 
@@ -32,7 +35,34 @@ class OrderListCreateView(generics.ListCreateAPIView):
         return Order.objects.filter(user=self.request.user).order_by('-date')
     
     def perform_create(self, serializer):
-        serializer.save()
+        """Create order with stock validation"""
+        try:
+            # Extract items data from the request
+            items_data = self.request.data.get('items', [])
+            shipping_address = serializer.validated_data.get('shipping_address')
+            shipping_method = serializer.validated_data.get('shipping_method', 'standard')
+            
+            # Use OrderManager to create order with stock validation
+            order = OrderManager.create_order(
+                user=self.request.user,
+                items_data=items_data,
+                shipping_address=shipping_address,
+                shipping_method=shipping_method
+            )
+            
+            # Set the created order in the serializer
+            serializer.instance = order
+            
+        except InsufficientStockError as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except ValidationError as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class OrderDetailView(generics.RetrieveUpdateAPIView):
@@ -277,3 +307,178 @@ def admin_order_stats(request):
     }
     
     return Response(stats)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def cancel_order(request, order_id):
+    """
+    Cancel an order and restore stock
+    """
+    try:
+        order = get_object_or_404(Order, id=order_id, user=request.user)
+        
+        # Use OrderManager to cancel order with stock restoration
+        OrderManager.cancel_order(order)
+        
+        return Response({
+            'message': f'Order {order_id} has been cancelled successfully',
+            'order_id': order_id,
+            'status': 'cancelled'
+        })
+        
+    except ValidationError as e:
+        return Response(
+            {'error': str(e)}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    except Exception as e:
+        return Response(
+            {'error': f'Failed to cancel order: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['PUT'])
+@permission_classes([permissions.IsAuthenticated])
+def update_order_item_quantity(request, order_id, item_id):
+    """
+    Update the quantity of an order item with stock validation
+    """
+    try:
+        order = get_object_or_404(Order, id=order_id, user=request.user)
+        order_item = get_object_or_404(OrderItem, id=item_id, order=order)
+        
+        new_quantity = request.data.get('quantity')
+        if not new_quantity or new_quantity <= 0:
+            return Response(
+                {'error': 'Quantity must be a positive integer'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Use OrderManager to update quantity with stock validation
+        OrderManager.update_order_quantity(order_item, new_quantity)
+        
+        # Refresh the order item and return updated data
+        order_item.refresh_from_db()
+        return Response({
+            'message': 'Order item quantity updated successfully',
+            'order_id': order_id,
+            'item_id': item_id,
+            'new_quantity': order_item.quantity,
+            'total_price': float(order_item.total_price)
+        })
+        
+    except InsufficientStockError as e:
+        return Response(
+            {'error': str(e)}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    except ValidationError as e:
+        return Response(
+            {'error': str(e)}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    except Exception as e:
+        return Response(
+            {'error': f'Failed to update order item: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAdminUser])
+def stock_monitoring(request):
+    """
+    Get stock monitoring information for admin
+    """
+    try:
+        threshold = int(request.GET.get('threshold', 10))
+        
+        # Get stock information using OrderManager utilities
+        low_stock_products = OrderManager.get_low_stock_products(threshold)
+        out_of_stock_products = OrderManager.get_out_of_stock_products()
+        
+        # Serialize the data
+        low_stock_data = [
+            {
+                'id': product.id,
+                'name': product.name,
+                'stock': product.stock,
+                'category': product.category.name,
+                'price': float(product.price)
+            }
+            for product in low_stock_products
+        ]
+        
+        out_of_stock_data = [
+            {
+                'id': product.id,
+                'name': product.name,
+                'category': product.category.name,
+                'price': float(product.price),
+                'sold': product.sold
+            }
+            for product in out_of_stock_products
+        ]
+        
+        return Response({
+            'threshold': threshold,
+            'low_stock_products': low_stock_data,
+            'out_of_stock_products': out_of_stock_data,
+            'low_stock_count': len(low_stock_data),
+            'out_of_stock_count': len(out_of_stock_data)
+        })
+        
+    except Exception as e:
+        return Response(
+            {'error': f'Failed to retrieve stock information: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def validate_cart_stock(request):
+    """
+    Validate stock availability for items in user's cart before checkout
+    """
+    try:
+        items_data = request.data.get('items', [])
+        
+        if not items_data:
+            return Response(
+                {'error': 'No items provided for validation'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate stock using OrderManager
+        try:
+            validated_items = OrderManager.validate_order_items(items_data)
+            
+            return Response({
+                'valid': True,
+                'message': 'All items are available in stock',
+                'validated_items': [
+                    {
+                        'product_id': item['product'].id,
+                        'product_name': item['product'].name,
+                        'requested_quantity': item['quantity'],
+                        'available_stock': item['product'].stock,
+                        'price': float(item['price'])
+                    }
+                    for item in validated_items
+                ]
+            })
+            
+        except (InsufficientStockError, ValidationError) as e:
+            return Response({
+                'valid': False,
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+    except Exception as e:
+        return Response(
+            {'error': f'Failed to validate cart: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

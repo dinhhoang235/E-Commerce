@@ -29,7 +29,7 @@ export interface CustomerListParams {
 
 export class CustomersService {
   static async getCustomers(params: CustomerListParams = {}): Promise<CustomerListResponse> {
-    const response = await api.get("/users/customers/", { params })
+    const response = await api.get("/users/admin/customers/", { params })
     return response.data
   }
 

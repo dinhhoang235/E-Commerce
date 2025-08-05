@@ -60,6 +60,9 @@ export default function AdminProductsPage() {
     features: [] as string[],
     colors: [] as string[],
     storage: [] as string[],
+    stock: "",
+    sold: "",
+    is_in_stock: true,
   })
 
   // Load products and categories on component mount
@@ -200,6 +203,9 @@ export default function AdminProductsPage() {
         features: newProduct.features,
         colors: newProduct.colors,
         storage: newProduct.storage,
+        stock: newProduct.stock ? Number.parseInt(newProduct.stock) : 0,
+        sold: newProduct.sold ? Number.parseInt(newProduct.sold) : 0,
+        is_in_stock: newProduct.is_in_stock,
       }
 
       // Handle image field properly
@@ -237,6 +243,9 @@ export default function AdminProductsPage() {
         features: [],
         colors: [],
         storage: [],
+        stock: "",
+        sold: "",
+        is_in_stock: true,
       })
       setIsAddDialogOpen(false)
     } catch (error) {
@@ -260,6 +269,9 @@ export default function AdminProductsPage() {
         features: newProduct.features,
         colors: newProduct.colors,
         storage: newProduct.storage,
+        stock: newProduct.stock ? Number.parseInt(newProduct.stock) : 0,
+        sold: newProduct.sold ? Number.parseInt(newProduct.sold) : 0,
+        is_in_stock: newProduct.is_in_stock,
       }
 
       // Handle image field properly
@@ -307,6 +319,9 @@ export default function AdminProductsPage() {
         features: [],
         colors: [],
         storage: [],
+        stock: "",
+        sold: "",
+        is_in_stock: true,
       })
       setIsEditDialogOpen(false)
       
@@ -408,6 +423,9 @@ export default function AdminProductsPage() {
                 features: [],
                 colors: [],
                 storage: [],
+                stock: "",
+                sold: "",
+                is_in_stock: true,
               })
             }
           }}>
@@ -470,6 +488,42 @@ export default function AdminProductsPage() {
                     value={newProduct.originalPrice}
                     onChange={(e) => setNewProduct((prev) => ({ ...prev, originalPrice: e.target.value }))}
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="stock">Stock Quantity</Label>
+                  <Input
+                    id="stock"
+                    type="number"
+                    min="0"
+                    value={newProduct.stock}
+                    onChange={(e) => setNewProduct((prev) => ({ ...prev, stock: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="sold">Sold Quantity</Label>
+                  <Input
+                    id="sold"
+                    type="number"
+                    min="0"
+                    value={newProduct.sold}
+                    onChange={(e) => setNewProduct((prev) => ({ ...prev, sold: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="is_in_stock">In Stock Status</Label>
+                  <div className="flex items-center space-x-2 mt-2">
+                    <input
+                      id="is_in_stock"
+                      type="checkbox"
+                      checked={newProduct.is_in_stock}
+                      onChange={(e) => setNewProduct((prev) => ({ ...prev, is_in_stock: e.target.checked }))}
+                      className="w-4 h-4"
+                    />
+                    <Label htmlFor="is_in_stock" className="text-sm">Product is in stock</Label>
+                  </div>
                 </div>
               </div>
 
@@ -701,6 +755,7 @@ export default function AdminProductsPage() {
                 <TableHead>Product</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Price</TableHead>
+                <TableHead>Stock</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Rating</TableHead>
                 <TableHead>Actions</TableHead>
@@ -709,7 +764,7 @@ export default function AdminProductsPage() {
             <TableBody>
               {filteredProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     <div className="text-slate-500">
                       {loading ? "Loading products..." : "No products found"}
                     </div>
@@ -749,6 +804,24 @@ export default function AdminProductsPage() {
                             ${product.original_price || product.originalPrice}
                           </p>
                         )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">{product.stock || 0}</span>
+                          <span className="text-xs text-slate-500">in stock</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-slate-600">{product.sold || 0}</span>
+                          <span className="text-xs text-slate-500">sold</span>
+                        </div>
+                        <Badge 
+                          variant={product.is_in_stock ? "default" : "destructive"} 
+                          className="text-xs"
+                        >
+                          {product.is_in_stock ? "In Stock" : "Out of Stock"}
+                        </Badge>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -795,6 +868,9 @@ export default function AdminProductsPage() {
                               features: product.features || [],
                               colors: product.colors || [],
                               storage: product.storage || [],
+                              stock: product.stock?.toString() || "",
+                              sold: product.sold?.toString() || "",
+                              is_in_stock: product.is_in_stock ?? true,
                             })
                             setIsEditDialogOpen(true)
                           }}
@@ -880,6 +956,32 @@ export default function AdminProductsPage() {
                   <div className="space-y-2">
                     <h3 className="font-medium">Description</h3>
                     <p className="text-slate-600">{viewingProduct.description || "No description available"}</p>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <h3 className="font-medium">Stock</h3>
+                      <div className="space-y-1">
+                        <p className="text-2xl font-bold text-blue-600">{viewingProduct.stock || 0}</p>
+                        <p className="text-sm text-slate-500">units available</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="font-medium">Sold</h3>
+                      <div className="space-y-1">
+                        <p className="text-2xl font-bold text-green-600">{viewingProduct.sold || 0}</p>
+                        <p className="text-sm text-slate-500">units sold</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="font-medium">Status</h3>
+                      <Badge 
+                        variant={viewingProduct.is_in_stock ? "default" : "destructive"} 
+                        className="w-fit"
+                      >
+                        {viewingProduct.is_in_stock ? "In Stock" : "Out of Stock"}
+                      </Badge>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -1006,6 +1108,9 @@ export default function AdminProductsPage() {
                   features: viewingProduct.features || [],
                   colors: viewingProduct.colors || [],
                   storage: viewingProduct.storage || [],
+                  stock: viewingProduct.stock?.toString() || "",
+                  sold: viewingProduct.sold?.toString() || "",
+                  is_in_stock: viewingProduct.is_in_stock ?? true,
                 })
                 setIsEditDialogOpen(true)
                 // Reset stats since we're switching to edit mode
@@ -1035,6 +1140,9 @@ export default function AdminProductsPage() {
             features: [],
             colors: [],
             storage: [],
+            stock: "",
+            sold: "",
+            is_in_stock: true,
           })
         }
       }}>
@@ -1097,6 +1205,42 @@ export default function AdminProductsPage() {
                   value={newProduct.originalPrice}
                   onChange={(e) => setNewProduct((prev) => ({ ...prev, originalPrice: e.target.value }))}
                 />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="stock">Stock Quantity</Label>
+                <Input
+                  id="stock"
+                  type="number"
+                  min="0"
+                  value={newProduct.stock}
+                  onChange={(e) => setNewProduct((prev) => ({ ...prev, stock: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="sold">Sold Quantity</Label>
+                <Input
+                  id="sold"
+                  type="number"
+                  min="0"
+                  value={newProduct.sold}
+                  onChange={(e) => setNewProduct((prev) => ({ ...prev, sold: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="is_in_stock">In Stock Status</Label>
+                <div className="flex items-center space-x-2 mt-2">
+                  <input
+                    id="is_in_stock"
+                    type="checkbox"
+                    checked={newProduct.is_in_stock}
+                    onChange={(e) => setNewProduct((prev) => ({ ...prev, is_in_stock: e.target.checked }))}
+                    className="w-4 h-4"
+                  />
+                  <Label htmlFor="is_in_stock" className="text-sm">Product is in stock</Label>
+                </div>
               </div>
             </div>
 
@@ -1288,6 +1432,9 @@ export default function AdminProductsPage() {
                   features: [],
                   colors: [],
                   storage: [],
+                  stock: "",
+                  sold: "",
+                  is_in_stock: true,
                 })
               }}
             >

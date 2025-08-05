@@ -1,7 +1,13 @@
 from django.db import models
+from django.core.exceptions import ValidationError
 from PIL import Image
 import os
 from django.db.models import Avg, Count
+
+
+class InsufficientStockError(Exception):
+    """Raised when there's insufficient stock for a product"""
+    pass
 
 
 def upload_image_path(instance, filename):
@@ -57,12 +63,51 @@ class Product(models.Model):
     storage = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    stock = models.PositiveIntegerField(default=0)
+    sold = models.PositiveIntegerField(default=0)
+    is_in_stock = models.BooleanField(default=True)
 
     class Meta:
         ordering = ['-created_at']
 
     def __str__(self):
         return self.name
+    
+    def update_stock_status(self):
+        self.is_in_stock = self.stock > 0
+        self.save(update_fields=['is_in_stock'])
+    
+    def reduce_stock(self, quantity):
+        """
+        Reduce stock when a product is purchased.
+        Raises InsufficientStockError if insufficient stock.
+        """
+        if self.stock < quantity:
+            raise InsufficientStockError(f"Insufficient stock for {self.name}. Available: {self.stock}, Requested: {quantity}")
+        
+        self.stock -= quantity
+        self.sold += quantity
+        self.update_stock_status()
+        self.save(update_fields=['stock', 'sold', 'is_in_stock'])
+    
+    def increase_stock(self, quantity):
+        """
+        Increase stock when an order is cancelled or returned.
+        """
+        self.stock += quantity
+        if self.sold >= quantity:
+            self.sold -= quantity
+        else:
+            self.sold = 0
+        self.update_stock_status()
+        self.save(update_fields=['stock', 'sold', 'is_in_stock'])
+    
+    def check_stock_availability(self, quantity):
+        """
+        Check if the requested quantity is available in stock.
+        """
+        return self.stock >= quantity
     
     def update_rating_and_review_count(self):
         """

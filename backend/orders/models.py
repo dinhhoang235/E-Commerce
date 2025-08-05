@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from users.models import Address
 from products.models import Product
 
@@ -26,6 +27,7 @@ class Order(models.Model):
     total = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     date = models.DateTimeField(auto_now_add=True)
+    is_paid = models.BooleanField(default=False)
     
     def __str__(self):
         return f"{self.id} - {self.user.username}"
@@ -60,6 +62,29 @@ class Order(models.Model):
     def shipping_method_display(self):
         """Get shipping method display name"""
         return dict(self.SHIPPING_METHOD_CHOICES).get(self.shipping_method, 'Standard Shipping')
+    
+    @property
+    def can_be_cancelled(self):
+        """Check if order can be cancelled (stock can be restored)"""
+        return self.status in ['pending', 'processing']
+    
+    def cancel_order(self):
+        """Cancel the order and restore stock for all items"""
+        if not self.can_be_cancelled:
+            raise ValidationError(f"Cannot cancel order with status: {self.status}")
+        
+        # Change status to cancelled (this will trigger the signal to restore stock)
+        self.status = 'cancelled'
+        self.save(update_fields=['status'])
+    
+    @property
+    def total_items(self):
+        """Get total number of items in this order"""
+        return sum(item.quantity for item in self.items.all())
+    
+    def calculate_total(self):
+        """Calculate total price from order items"""
+        return sum(item.total_price for item in self.items.all())
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
@@ -69,3 +94,24 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.product.name} x {self.quantity}"
+    
+    def clean(self):
+        """
+        Validate that there's sufficient stock for this order item.
+        """
+        if self.product and self.quantity:
+            if not self.product.check_stock_availability(self.quantity):
+                raise ValidationError(
+                    f"Insufficient stock for {self.product.name}. "
+                    f"Available: {self.product.stock}, Requested: {self.quantity}"
+                )
+    
+    @property
+    def total_price(self):
+        """Calculate total price for this order item."""
+        return self.price * self.quantity
+    
+    def save(self, *args, **kwargs):
+        """Override save to include validation."""
+        self.full_clean()
+        super().save(*args, **kwargs)
