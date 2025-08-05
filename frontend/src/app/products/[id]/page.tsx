@@ -12,7 +12,7 @@ import { useCart } from "@/components/cart-provider"
 import { WishlistButton } from "@/components/wishlist-button"
 import { ProductGallery } from "@/components/product-gallery"
 import { ProductSpecs } from "@/components/product-specs"
-import { RelatedProducts } from "@/components/related-products"
+import { ProductRecommendations } from "@/components/product-recommendations"
 import { getAllProducts } from "@/lib/services/products"
 import { WriteReviewDialog } from "@/components/write-review-dialog"
 import { ReviewList } from "@/components/review-list"
@@ -429,11 +429,8 @@ export default function ProductPage() {
         </Tabs>
       </div>
 
-      {/* Related Products */}
-      <RelatedProducts 
-        currentProductId={product.id} 
-        category={typeof product.category === 'object' ? product.category.slug : product.category} 
-      />
+      {/* Product Recommendations */}
+      <ProductRecommendations productId={product.id} />
     </div>
   )
 }

@@ -1,6 +1,7 @@
 from django.db import models
 from PIL import Image
 import os
+from django.db.models import Avg, Count
 
 
 def upload_image_path(instance, filename):
@@ -68,7 +69,6 @@ class Product(models.Model):
         Calculate and update the average rating and review count based on actual reviews.
         This method should be called whenever a review is added, updated, or deleted.
         """
-        from django.db.models import Avg, Count
         
         # Import here to avoid circular imports
         try:

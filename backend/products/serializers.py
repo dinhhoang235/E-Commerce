@@ -100,3 +100,18 @@ class ProductSerializer(serializers.ModelSerializer, ImageHandlingMixin):
         self.apply_image_file(instance, image_file)
         
         return instance
+class ProductRecommendationSerializer(serializers.ModelSerializer, ImageHandlingMixin):
+    category = CategorySerializer(read_only=True)
+    image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Product
+        fields = ['id', 'name', 'price', 'image', 'category']
+
+    def get_image(self, obj):
+        return self.get_image_url(obj) if obj.image else None
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation['category'] = instance.category.name if instance.category else None
+        return representation

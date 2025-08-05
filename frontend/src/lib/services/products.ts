@@ -31,9 +31,31 @@ function buildFormDataIfNeeded(data: any): FormData | any {
   return data
 }
 
-export async function getAllProducts() {
+export async function getProductsByCategory(categorySlug: string) {
   try {
-    const response = await api.get("/products/")
+    const params = new URLSearchParams()
+    if (categorySlug && categorySlug !== 'all') {
+      // Search by category slug directly, this will include products from the category
+      // and its subcategories based on backend logic
+      params.append('category__slug', categorySlug)
+    }
+    
+    const response = await api.get(`/products/?${params.toString()}`)
+    return response.data
+  } catch (error) {
+    console.error("Error fetching products by category:", error)
+    throw error
+  }
+}
+
+export async function getAllProducts(categorySlug?: string) {
+  try {
+    const params = new URLSearchParams()
+    if (categorySlug && categorySlug !== 'all') {
+      params.append('category__slug', categorySlug)
+    }
+    
+    const response = await api.get(`/products/?${params.toString()}`)
     return response.data
   } catch (error) {
     console.error("Error fetching products:", error)
@@ -94,6 +116,52 @@ export async function deleteProduct(productId: string) {
     return response.data
   } catch (error) {
     console.error("Error deleting product:", error)
+    throw error
+  }
+}
+
+// Product Recommendations API
+export async function getProductRecommendations(productId: string) {
+  try {
+    const response = await api.get(`/products/${productId}/recommendations/`)
+    return response.data
+  } catch (error) {
+    console.error("Error fetching product recommendations:", error)
+    throw error
+  }
+}
+
+export async function getTopSellers() {
+  try {
+    const response = await api.get("/products/top_sellers/")
+    return response.data
+  } catch (error) {
+    console.error("Error fetching top sellers:", error)
+    throw error
+  }
+}
+
+export async function getNewArrivals() {
+  try {
+    const response = await api.get("/products/new_arrivals/")
+    return response.data
+  } catch (error) {
+    console.error("Error fetching new arrivals:", error)
+    throw error
+  }
+}
+
+export async function getPersonalizedRecommendations(categoryIds?: string[]) {
+  try {
+    const params = new URLSearchParams()
+    if (categoryIds && categoryIds.length > 0) {
+      categoryIds.forEach(id => params.append('categories', id))
+    }
+    
+    const response = await api.get(`/products/personalized/?${params.toString()}`)
+    return response.data
+  } catch (error) {
+    console.error("Error fetching personalized recommendations:", error)
     throw error
   }
 }

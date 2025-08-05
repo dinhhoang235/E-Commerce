@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ShoppingCart, Star, Truck, Shield, Headphones, Loader2 } from "lucide-react"
 import { useCart } from "@/components/cart-provider"
-import { getAllProducts } from "@/lib/services/products"
+import { getAllProducts, getTopSellers, getNewArrivals, getPersonalizedRecommendations } from "@/lib/services/products"
 import { getAllCategories } from "@/lib/services/categories"
 import { StarRating } from "@/components/star-rating"
 
@@ -39,6 +39,9 @@ export default function HomePage() {
   const { addItem } = useCart()
   const [categories, setCategories] = useState<Category[]>([])
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([])
+  const [topSellers, setTopSellers] = useState<Product[]>([])
+  const [newArrivals, setNewArrivals] = useState<Product[]>([])
+  const [personalizedRecommendations, setPersonalizedRecommendations] = useState<Product[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -50,13 +53,19 @@ export default function HomePage() {
         setError(null)
 
         // Fetch categories and products in parallel
-        const [categoriesResponse, productsResponse] = await Promise.all([
+        const [categoriesResponse, productsResponse, topSellersResponse, newArrivalsResponse, personalizedResponse] = await Promise.all([
           getAllCategories(),
-          getAllProducts()
+          getAllProducts(),
+          getTopSellers(),
+          getNewArrivals(),
+          getPersonalizedRecommendations() // No specific categories for homepage
         ])
 
         console.log("Categories API Response:", categoriesResponse)
         console.log("Products API Response:", productsResponse)
+        console.log("Top Sellers API Response:", topSellersResponse)
+        console.log("New Arrivals API Response:", newArrivalsResponse)
+        console.log("Personalized API Response:", personalizedResponse)
 
         // Handle categories data
         let categoriesData: Category[] = []
@@ -87,6 +96,11 @@ export default function HomePage() {
           .slice(0, 3)
         
         setFeaturedProducts(featured)
+
+        // Set recommendation data
+        setTopSellers(Array.isArray(topSellersResponse) ? topSellersResponse.slice(0, 6) : [])
+        setNewArrivals(Array.isArray(newArrivalsResponse) ? newArrivalsResponse.slice(0, 6) : [])
+        setPersonalizedRecommendations(Array.isArray(personalizedResponse) ? personalizedResponse.slice(0, 6) : [])
 
       } catch (err) {
         console.error("Error fetching data:", err)
@@ -258,33 +272,121 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Featured Products */}
+      {/* Top Sellers Section */}
       <section className="py-20 bg-white">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
-            <h2 className="text-4xl lg:text-5xl font-bold mb-6 bg-gradient-to-r from-slate-900 to-slate-600 bg-clip-text text-transparent">
-              Featured Products
+            <h2 className="text-4xl lg:text-5xl font-bold mb-6 bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
+              🔥 Top Sellers
             </h2>
             <p className="text-slate-600 text-xl max-w-2xl mx-auto">
-              Our most popular and newest devices
+              Our best-selling products loved by customers
             </p>
           </div>
           
           {isLoading ? (
-            <div className="flex justify-center">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="animate-pulse">
+                  <div className="bg-gray-200 aspect-square rounded-lg mb-4"></div>
+                  <div className="bg-gray-200 h-6 rounded mb-2"></div>
+                  <div className="bg-gray-200 h-4 rounded mb-2"></div>
+                  <div className="bg-gray-200 h-8 rounded"></div>
+                </div>
+              ))}
             </div>
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
-              {featuredProducts.map((product) => (
+              {topSellers.map((product, index) => (
                 <Card key={product.id} className="group hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 border-0 shadow-lg overflow-hidden">
                   <CardContent className="p-0">
                     <div className="relative mb-6 bg-gradient-to-br from-gray-50 to-gray-100">
-                      {product.badge && (
-                        <Badge className="absolute top-4 left-4 z-10 bg-red-500 hover:bg-red-600 text-white font-semibold px-3 py-1">
-                          {product.badge}
+                      {index < 3 && (
+                        <Badge className="absolute top-4 left-4 z-10 bg-gradient-to-r from-yellow-400 to-orange-500 text-white font-bold px-3 py-1">
+                          #{index + 1} Best Seller
                         </Badge>
                       )}
+                      <Link href={`/products/${product.id}`}>
+                        <img
+                          src={formatImageUrl(product.image)}
+                          alt={product.name}
+                          className="w-full h-72 object-contain group-hover:scale-105 transition-transform duration-500 p-6"
+                        />
+                      </Link>
+                    </div>
+                    <div className="px-6 pb-6 space-y-4">
+                      <Link href={`/products/${product.id}`}>
+                        <h3 className="text-xl font-bold hover:text-orange-600 transition-colors leading-tight">
+                          {product.name}
+                        </h3>
+                      </Link>
+                      <div className="flex items-center gap-2">
+                        <StarRating rating={product.rating} size="md" />
+                        <span className="text-sm text-slate-600 font-medium">({product.reviews || 0})</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl font-bold text-slate-900">${product.price}</span>
+                        {product.original_price && product.original_price > product.price && (
+                          <span className="text-lg text-slate-500 line-through">${product.original_price}</span>
+                        )}
+                      </div>
+                      <Button 
+                        className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 rounded-lg transition-all duration-300 transform hover:scale-[1.02]"
+                        onClick={() => handleAddToCart(product)}
+                      >
+                        <ShoppingCart className="w-4 h-4 mr-2" />
+                        Add to Cart
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+          
+          {!isLoading && topSellers.length === 0 && (
+            <div className="text-center py-16">
+              <p className="text-slate-600 text-lg mb-6">No top sellers available at the moment.</p>
+              <Link href="/products">
+                <Button className="bg-orange-600 hover:bg-orange-700 px-8 py-3">Browse All Products</Button>
+              </Link>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* New Arrivals Section */}
+      <section className="py-20 bg-gradient-to-br from-blue-50 to-purple-50">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl lg:text-5xl font-bold mb-6 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              ✨ New Arrivals
+            </h2>
+            <p className="text-slate-600 text-xl max-w-2xl mx-auto">
+              Fresh products just added to our collection
+            </p>
+          </div>
+          
+          {isLoading ? (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="animate-pulse">
+                  <div className="bg-gray-200 aspect-square rounded-lg mb-4"></div>
+                  <div className="bg-gray-200 h-6 rounded mb-2"></div>
+                  <div className="bg-gray-200 h-4 rounded mb-2"></div>
+                  <div className="bg-gray-200 h-8 rounded"></div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
+              {newArrivals.map((product) => (
+                <Card key={product.id} className="group hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 border-0 shadow-lg overflow-hidden bg-white/80 backdrop-blur-sm">
+                  <CardContent className="p-0">
+                    <div className="relative mb-6 bg-gradient-to-br from-gray-50 to-gray-100">
+                      <Badge className="absolute top-4 left-4 z-10 bg-gradient-to-r from-blue-500 to-purple-500 text-white font-bold px-3 py-1">
+                        NEW
+                      </Badge>
                       <Link href={`/products/${product.id}`}>
                         <img
                           src={formatImageUrl(product.image)}
@@ -310,7 +412,7 @@ export default function HomePage() {
                         )}
                       </div>
                       <Button 
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-all duration-300 transform hover:scale-[1.02]"
+                        className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-3 rounded-lg transition-all duration-300 transform hover:scale-[1.02]"
                         onClick={() => handleAddToCart(product)}
                       >
                         <ShoppingCart className="w-4 h-4 mr-2" />
@@ -323,14 +425,119 @@ export default function HomePage() {
             </div>
           )}
           
-          {!isLoading && featuredProducts.length === 0 && (
+          {!isLoading && newArrivals.length === 0 && (
             <div className="text-center py-16">
-              <p className="text-slate-600 text-lg mb-6">No featured products available at the moment.</p>
+              <p className="text-slate-600 text-lg mb-6">No new arrivals available at the moment.</p>
               <Link href="/products">
                 <Button className="bg-blue-600 hover:bg-blue-700 px-8 py-3">Browse All Products</Button>
               </Link>
             </div>
           )}
+        </div>
+      </section>
+
+      {/* Personalized Recommendations Section */}
+      <section className="py-20 bg-white">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl lg:text-5xl font-bold mb-6 bg-gradient-to-r from-pink-600 to-rose-600 bg-clip-text text-transparent">
+              💖 Recommended for You
+            </h2>
+            <p className="text-slate-600 text-xl max-w-2xl mx-auto">
+              Curated products that match your interests
+            </p>
+          </div>
+          
+          {isLoading ? (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="animate-pulse">
+                  <div className="bg-gray-200 aspect-square rounded-lg mb-4"></div>
+                  <div className="bg-gray-200 h-6 rounded mb-2"></div>
+                  <div className="bg-gray-200 h-4 rounded mb-2"></div>
+                  <div className="bg-gray-200 h-8 rounded"></div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
+              {personalizedRecommendations.map((product) => (
+                <Card key={product.id} className="group hover:shadow-2xl transition-all duration-500 transform hover:-translate-y-2 border-0 shadow-lg overflow-hidden">
+                  <CardContent className="p-0">
+                    <div className="relative mb-6 bg-gradient-to-br from-gray-50 to-gray-100">
+                      <Badge className="absolute top-4 left-4 z-10 bg-gradient-to-r from-pink-500 to-rose-500 text-white font-bold px-3 py-1">
+                        For You
+                      </Badge>
+                      <Link href={`/products/${product.id}`}>
+                        <img
+                          src={formatImageUrl(product.image)}
+                          alt={product.name}
+                          className="w-full h-72 object-contain group-hover:scale-105 transition-transform duration-500 p-6"
+                        />
+                      </Link>
+                    </div>
+                    <div className="px-6 pb-6 space-y-4">
+                      <Link href={`/products/${product.id}`}>
+                        <h3 className="text-xl font-bold hover:text-pink-600 transition-colors leading-tight">
+                          {product.name}
+                        </h3>
+                      </Link>
+                      <div className="flex items-center gap-2">
+                        <StarRating rating={product.rating} size="md" />
+                        <span className="text-sm text-slate-600 font-medium">({product.reviews || 0})</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl font-bold text-slate-900">${product.price}</span>
+                        {product.original_price && product.original_price > product.price && (
+                          <span className="text-lg text-slate-500 line-through">${product.original_price}</span>
+                        )}
+                      </div>
+                      <Button 
+                        className="w-full bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white font-semibold py-3 rounded-lg transition-all duration-300 transform hover:scale-[1.02]"
+                        onClick={() => handleAddToCart(product)}
+                      >
+                        <ShoppingCart className="w-4 h-4 mr-2" />
+                        Add to Cart
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+          
+          {!isLoading && personalizedRecommendations.length === 0 && (
+            <div className="text-center py-16">
+              <p className="text-slate-600 text-lg mb-6">No personalized recommendations available at the moment.</p>
+              <Link href="/products">
+                <Button className="bg-pink-600 hover:bg-pink-700 px-8 py-3">Browse All Products</Button>
+              </Link>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Quick Navigation Section */}
+      <section className="py-16 bg-gradient-to-r from-slate-900 to-slate-800 text-white">
+        <div className="container mx-auto px-4 text-center">
+          <h2 className="text-3xl font-bold mb-8">Explore More</h2>
+          <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+            <Link href="/products?filter=top_sellers">
+              <Button variant="outline" size="lg" className="w-full bg-transparent border-orange-400 text-orange-400 hover:bg-orange-400 hover:text-white transition-all duration-300">
+                🔥 View All Top Sellers
+              </Button>
+            </Link>
+            <Link href="/products?filter=new_arrivals">
+              <Button variant="outline" size="lg" className="w-full bg-transparent border-blue-400 text-blue-400 hover:bg-blue-400 hover:text-white transition-all duration-300">
+                ✨ See All New Arrivals
+              </Button>
+            </Link>
+            <Link href="/products">
+              <Button variant="outline" size="lg" className="w-full bg-transparent border-pink-400 text-pink-400 hover:bg-pink-400 hover:text-white transition-all duration-300">
+                💖 Browse All Products
+              </Button>
+            </Link>
+          </div>
         </div>
       </section>
 

@@ -12,7 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ShoppingCart, Star, X, Heart } from "lucide-react"
 import { useCart } from "@/components/cart-provider"
 import { WishlistButton } from "@/components/wishlist-button"
-import { getAllProducts } from "@/lib/services/products"
+import { getAllProducts, getProductsByCategory } from "@/lib/services/products"
+import { getAllCategories } from "@/lib/services/categories"
 import { StarRating } from "@/components/star-rating"
 
 // Define Category interface
@@ -43,6 +44,7 @@ export default function ProductsPage() {
   const searchParams = useSearchParams()
   const { addItem } = useCart()
   const [allProducts, setAllProducts] = useState<Product[]>([])
+  const [allCategories, setAllCategories] = useState<Category[]>([])
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
   const [totalProductCount, setTotalProductCount] = useState(0)
   const [searchTerm, setSearchTerm] = useState("")
@@ -51,12 +53,34 @@ export default function ProductsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
 
-  // Fetch products from API
+  // Fetch products and categories from API
   useEffect(() => {
-    const fetchProducts = async () => {
+    const fetchData = async () => {
       try {
         setIsLoading(true)
-        const response = await getAllProducts()
+        
+        // Fetch categories first
+        const categoriesResponse = await getAllCategories()
+        let categoriesData: Category[] = []
+        if (Array.isArray(categoriesResponse)) {
+          categoriesData = categoriesResponse
+        } else if (categoriesResponse && Array.isArray(categoriesResponse.results)) {
+          categoriesData = categoriesResponse.results
+        }
+        
+        // Filter active categories only
+        const activeCategories = categoriesData.filter((cat: Category) => cat.is_active !== false)
+        setAllCategories(activeCategories)
+        
+        // Fetch products - use category filter if specified in URL
+        const urlCategory = searchParams.get("category")
+        let response
+        
+        if (urlCategory && urlCategory !== 'all') {
+          response = await getProductsByCategory(urlCategory)
+        } else {
+          response = await getAllProducts()
+        }
         
         // Handle paginated response structure: {count, next, previous, results}
         if (response && response.results && Array.isArray(response.results)) {
@@ -75,14 +99,14 @@ export default function ProductsPage() {
         }
         setIsLoading(false)
       } catch (err) {
-        console.error("Failed to fetch products:", err)
-        setError("Failed to load products. Please try again later.")
+        console.error("Failed to fetch data:", err)
+        setError("Failed to load data. Please try again later.")
         setIsLoading(false)
       }
     }
 
-    fetchProducts()
-  }, [])
+    fetchData()
+  }, [searchParams]) // Re-fetch when URL parameters change
 
   // Initialize state from URL parameters
   useEffect(() => {
@@ -110,7 +134,7 @@ export default function ProductsPage() {
     }
   }, [searchParams])
 
-  // Filter products based on search term, category, and sort
+  // Filter products based on search term and sort (category filtering is now done by API)
   useEffect(() => {
     // Make sure allProducts is an array and not empty
     if (!Array.isArray(allProducts) || allProducts.length === 0) {
@@ -122,18 +146,8 @@ export default function ProductsPage() {
       // Create a fresh copy of the products array
       let filtered = [...allProducts];
 
-      // Filter by category
-      if (selectedCategory !== "all") {
-        filtered = filtered.filter((product: Product) => {
-          if (!product || !product.category) return false;
-          
-          // Handle both string and object category
-          const productCategory = typeof product.category === 'object' ? product.category.slug : product.category;
-          return productCategory === selectedCategory;
-        });
-      }
-
-      // Filter by search term
+      // Note: Category filtering is now handled by the API, not client-side
+      // Only filter by search term here
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase();
         filtered = filtered.filter(
@@ -181,7 +195,42 @@ export default function ProductsPage() {
       console.error("Error filtering products:", err);
       setFilteredProducts([]);
     }
-  }, [allProducts, selectedCategory, searchTerm, sortBy])
+  }, [allProducts, searchTerm, sortBy]) // Removed selectedCategory since it's now handled by API
+
+  // Handle category change - fetch new products when category changes
+  const handleCategoryChange = async (newCategory: string) => {
+    setSelectedCategory(newCategory)
+    setIsLoading(true)
+    setError("")
+    
+    try {
+      let response
+      if (newCategory === 'all') {
+        response = await getAllProducts()
+      } else {
+        response = await getProductsByCategory(newCategory)
+      }
+      
+      // Handle response format
+      if (response && response.results && Array.isArray(response.results)) {
+        setAllProducts(response.results)
+        setTotalProductCount(response.count || response.results.length)
+      } else if (Array.isArray(response)) {
+        setAllProducts(response)
+        setTotalProductCount(response.length)
+      } else {
+        console.error("API returned unexpected data structure:", response)
+        setAllProducts([])
+        setError("Data format error. Please try again later.")
+      }
+    } catch (err) {
+      console.error("Failed to fetch products for category:", err)
+      setError("Failed to load products. Please try again later.")
+      setAllProducts([])
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const handleAddToCart = (product: Product) => {
     try {
@@ -239,11 +288,7 @@ export default function ProductsPage() {
         <h1 className="text-3xl lg:text-4xl font-bold mb-4">
           {selectedCategory === "all"
             ? "All Products"
-            : selectedCategory === "iphone"
-              ? "iPhone"
-              : selectedCategory === "ipad"
-                ? "iPad"
-                : "MacBook"}
+            : allCategories.find(cat => cat.slug === selectedCategory)?.name || "Products"}
         </h1>
         <p className="text-slate-600">
           {searchTerm ? `Search results for "${searchTerm}"` : "Discover our complete collection of Apple products"}
@@ -285,15 +330,17 @@ export default function ProductsPage() {
             className="w-full"
           />
         </div>
-        <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+        <Select value={selectedCategory} onValueChange={handleCategoryChange}>
           <SelectTrigger className="w-full lg:w-48">
             <SelectValue placeholder="Category" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Categories</SelectItem>
-            <SelectItem value="iphone">iPhone</SelectItem>
-            <SelectItem value="ipad">iPad</SelectItem>
-            <SelectItem value="macbook">MacBook</SelectItem>
+            {allCategories.map((category) => (
+              <SelectItem key={category.id} value={category.slug}>
+                {category.name}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <Select value={sortBy} onValueChange={setSortBy}>
@@ -428,7 +475,7 @@ export default function ProductsPage() {
                   variant="outline"
                   onClick={() => {
                     setSearchTerm("")
-                    setSelectedCategory("all")
+                    handleCategoryChange("all")
                   }}
                   className="mt-4"
                 >
