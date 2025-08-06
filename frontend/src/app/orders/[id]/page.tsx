@@ -5,12 +5,13 @@ import { useRouter, useParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { ArrowLeft, Package, MapPin, CreditCard, Loader2, AlertCircle } from "lucide-react"
+import { ArrowLeft, Package, MapPin, Loader2, AlertCircle } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
 import { userOrdersApi, type Order } from "@/lib/services/orders"
 import { useToast } from "@/hooks/use-toast"
+import { CancelOrderButton } from "@/components/ui/cancel-order-button"
+import { OrderStatusBadge } from "@/components/ui/order-status-badge"
 
 export default function OrderDetailPage() {
   const { user } = useAuth()
@@ -22,6 +23,15 @@ export default function OrderDetailPage() {
   const [error, setError] = useState<string | null>(null)
 
   const orderId = params.id as string
+
+  // Handle order cancellation
+  const handleOrderCancelled = (cancelledOrder: Order) => {
+    setOrder(cancelledOrder)
+    toast({
+      title: "Order Updated",
+      description: "Order status has been updated.",
+    })
+  }
 
   useEffect(() => {
     if (!user) {
@@ -52,29 +62,6 @@ export default function OrderDetailPage() {
       fetchOrder()
     }
   }, [user, router, orderId, toast])
-
-  // Helper function to get status badge variant
-  const getStatusVariant = (status: string) => {
-    switch (status) {
-      case "completed":
-      case "delivered":
-        return "default"
-      case "processing":
-      case "shipped":
-        return "secondary"
-      case "pending":
-        return "outline"
-      case "cancelled":
-        return "destructive"
-      default:
-        return "secondary"
-    }
-  }
-
-  // Helper function to format status display text
-  const getStatusDisplay = (status: string) => {
-    return status.charAt(0).toUpperCase() + status.slice(1)
-  }
 
   if (!user) {
     return null
@@ -127,9 +114,7 @@ export default function OrderDetailPage() {
         <div className="mb-6">
           <div className="flex justify-between items-start mb-2">
             <h1 className="text-3xl font-bold">Order #{order.id}</h1>
-            <Badge variant={getStatusVariant(order.status)} className="text-sm">
-              {getStatusDisplay(order.status)}
-            </Badge>
+            <OrderStatusBadge status={order.status} className="text-sm" />
           </div>
           <p className="text-slate-600">
             Placed on {new Date(order.date).toLocaleDateString()} at{" "}
@@ -251,16 +236,15 @@ export default function OrderDetailPage() {
                 </div>
 
                 {/* Order Actions */}
-                {order.status === "pending" && (
-                  <div className="pt-4">
-                    <Button variant="outline" className="w-full" disabled>
-                      Cancel Order
-                    </Button>
-                    <p className="text-xs text-slate-500 text-center mt-2">
-                      Order cancellation feature coming soon
-                    </p>
-                  </div>
-                )}
+                <div className="pt-4">
+                  <CancelOrderButton 
+                    order={order}
+                    onOrderCancelled={handleOrderCancelled}
+                    variant="destructive"
+                    size="default"
+                    className="w-full"
+                  />
+                </div>
               </CardContent>
             </Card>
           </div>

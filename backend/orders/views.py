@@ -482,3 +482,186 @@ def validate_cart_stock(request):
             {'error': f'Failed to validate cart: {str(e)}'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+        
+class CancelOrderView(generics.GenericAPIView):
+    """
+    POST: Cancel an order and restore stock - Frontend optimized
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = OrderSerializer
+    lookup_url_kwarg = 'order_id'
+    
+    def get_object(self):
+        order_id = self.kwargs.get(self.lookup_url_kwarg)
+        return get_object_or_404(Order, id=order_id, user=self.request.user)
+    
+    def post(self, request, *args, **kwargs):
+        """Cancel the order"""
+        try:
+            order = self.get_object()
+            
+            # Check if order can be cancelled
+            if order.status not in ['pending', 'processing']:
+                return Response({
+                    'success': False,
+                    'error': f'Cannot cancel order with status: {order.status}. Only pending or processing orders can be cancelled.',
+                    'current_status': order.status,
+                    'order_id': order.id
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Store original status for response
+            original_status = order.status
+            
+            # Use OrderManager to cancel order with stock restoration
+            OrderManager.cancel_order(order)
+            
+            # Return detailed response for frontend
+            return Response({
+                'success': True,
+                'message': 'Order cancelled successfully',
+                'data': {
+                    'order_id': order.id,
+                    'previous_status': original_status,
+                    'current_status': 'cancelled',
+                    'total_refund': float(order.total),
+                    'cancelled_at': order.updated_at.isoformat() if hasattr(order, 'updated_at') else None,
+                    'items_count': order.items.count()
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except ValidationError as e:
+            return Response({
+                'success': False,
+                'error': str(e),
+                'order_id': kwargs.get('order_id')
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': f'Failed to cancel order: {str(e)}',
+                'order_id': kwargs.get('order_id')
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+class CheckCancelOrderView(generics.RetrieveAPIView):
+    """
+    GET: Check if an order can be cancelled - Helper endpoint for frontend
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_url_kwarg = 'order_id'
+    
+    def get_object(self):
+        """Get the order for the authenticated user"""
+        order_id = self.kwargs.get(self.lookup_url_kwarg)
+        return get_object_or_404(Order, id=order_id, user=self.request.user)
+    
+    def retrieve(self, request, *args, **kwargs):
+        """Check cancellation eligibility"""
+        try:
+            order = self.get_object()
+            
+            can_cancel = order.status in ['pending', 'processing']
+            
+            return Response({
+                'can_cancel': can_cancel,
+                'order_id': order.id,
+                'current_status': order.status,
+                'reason': 'Order can be cancelled' if can_cancel else f'Cannot cancel order with status: {order.status}',
+                'order_details': {
+                    'total': float(order.total),
+                    'date': order.date.isoformat(),
+                    'items_count': order.items.count()
+                }
+            })
+        except Exception as e:
+            return Response({
+                'error': f'Failed to check cancellation status: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class OrderCancellationView(generics.GenericAPIView):
+    """
+    Combined view for order cancellation operations
+    GET: Check if order can be cancelled
+    POST: Cancel the order
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = OrderSerializer
+    lookup_url_kwarg = 'order_id'
+    
+    def get_object(self):
+        """Get the order for the authenticated user"""
+        order_id = self.kwargs.get(self.lookup_url_kwarg)
+        return get_object_or_404(Order, id=order_id, user=self.request.user)
+    
+    def get(self, request, *args, **kwargs):
+        """Check if order can be cancelled"""
+        try:
+            order = self.get_object()
+            
+            can_cancel = order.status in ['pending', 'processing']
+            
+            return Response({
+                'can_cancel': can_cancel,
+                'order_id': order.id,
+                'current_status': order.status,
+                'reason': 'Order can be cancelled' if can_cancel else f'Cannot cancel order with status: {order.status}',
+                'order_details': {
+                    'total': float(order.total),
+                    'date': order.date.isoformat(),
+                    'items_count': order.items.count(),
+                    'customer': order.user.username
+                }
+            })
+            
+        except Exception as e:
+            return Response({
+                'error': f'Failed to check cancellation status: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def post(self, request, *args, **kwargs):
+        """Cancel the order"""
+        try:
+            order = self.get_object()
+            
+            # Check if order can be cancelled
+            if order.status not in ['pending', 'processing']:
+                return Response({
+                    'success': False,
+                    'error': f'Cannot cancel order with status: {order.status}. Only pending or processing orders can be cancelled.',
+                    'current_status': order.status,
+                    'order_id': order.id
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Store original status for response
+            original_status = order.status
+            
+            # Use OrderManager to cancel order with stock restoration
+            OrderManager.cancel_order(order)
+            
+            # Return detailed response for frontend
+            return Response({
+                'success': True,
+                'message': 'Order cancelled successfully',
+                'data': {
+                    'order_id': order.id,
+                    'previous_status': original_status,
+                    'current_status': 'cancelled',
+                    'total_refund': float(order.total),
+                    'cancelled_at': order.updated_at.isoformat() if hasattr(order, 'updated_at') else None,
+                    'items_count': order.items.count()
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except ValidationError as e:
+            return Response({
+                'success': False,
+                'error': str(e),
+                'order_id': order.id
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': f'Failed to cancel order: {str(e)}',
+                'order_id': kwargs.get('order_id')
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+

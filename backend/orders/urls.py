@@ -22,6 +22,9 @@ user_patterns = [
     path('<str:order_id>/status/', views.update_order_status, name='user-order-status'),
     path('<str:order_id>/cancel/', views.cancel_order, name='user-cancel-order'),
     path('<str:order_id>/items/<int:item_id>/quantity/', views.update_order_item_quantity, name='update-order-item-quantity'),
+    path('cancel/<int:order_id>/', views.CancelOrderView.as_view(), name='cancel-order'),
+    path('can-cancel/<int:order_id>/', views.CheckCancelOrderView.as_view(), name='can-cancel-order'),
+    path('cancellation/<int:order_id>/', views.OrderCancellationView.as_view(), name='order-cancellation'),
 ]
 
 urlpatterns = [

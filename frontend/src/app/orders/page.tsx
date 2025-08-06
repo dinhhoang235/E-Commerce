@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Package, Eye, Loader2 } from "lucide-react"
 import { useAuth } from "@/components/auth-provider"
 import { userOrdersApi, type Order } from "@/lib/services/orders"
 import { useToast } from "@/hooks/use-toast"
+import { CancelOrderButton } from "@/components/ui/cancel-order-button"
+import { OrderStatusBadge } from "@/components/ui/order-status-badge"
 
 export default function OrdersPage() {
   const { user } = useAuth()
@@ -17,6 +18,15 @@ export default function OrdersPage() {
   const { toast } = useToast()
   const [orders, setOrders] = useState<Order[]>([])
   const [isLoading, setIsLoading] = useState(true)
+
+  // Handle order cancellation
+  const handleOrderCancelled = (cancelledOrder: Order) => {
+    setOrders(prevOrders => 
+      prevOrders.map(order => 
+        order.id === cancelledOrder.id ? cancelledOrder : order
+      )
+    )
+  }
 
   useEffect(() => {
     if (!user) {
@@ -47,29 +57,6 @@ export default function OrdersPage() {
 
   if (!user) {
     return null
-  }
-
-  // Helper function to get status badge variant
-  const getStatusVariant = (status: string) => {
-    switch (status) {
-      case "completed":
-      case "delivered":
-        return "default"
-      case "processing":
-      case "shipped":
-        return "secondary"
-      case "pending":
-        return "outline"
-      case "cancelled":
-        return "destructive"
-      default:
-        return "secondary"
-    }
-  }
-
-  // Helper function to format status display text
-  const getStatusDisplay = (status: string) => {
-    return status.charAt(0).toUpperCase() + status.slice(1)
   }
 
   // Helper function to count items in an order
@@ -126,9 +113,7 @@ export default function OrdersPage() {
                           Placed on {new Date(order.date).toLocaleDateString()}
                         </p>
                       </div>
-                      <Badge variant={getStatusVariant(order.status)}>
-                        {getStatusDisplay(order.status)}
-                      </Badge>
+                      <OrderStatusBadge status={order.status} />
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -139,12 +124,20 @@ export default function OrdersPage() {
                         </p>
                         <p className="font-bold">${parseFloat(order.total).toFixed(2)}</p>
                       </div>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href={`/orders/${order.id}`}>
-                          <Eye className="w-4 h-4 mr-2" />
-                          View Details
-                        </Link>
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/orders/${order.id}`}>
+                            <Eye className="w-4 h-4 mr-2" />
+                            View Details
+                          </Link>
+                        </Button>
+                        <CancelOrderButton 
+                          order={order}
+                          onOrderCancelled={handleOrderCancelled}
+                          variant="outline"
+                          size="sm"
+                        />
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

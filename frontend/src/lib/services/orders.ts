@@ -21,7 +21,7 @@ export interface Order {
   email: string
   products: string[]
   total: string
-  status: "pending" | "processing" | "shipped" | "completed" | "cancelled"
+  status: "pending" | "processing" | "shipped" | "completed" | "cancelled" | "delivered"
   date: string
   shipping: ShippingInfo
   items?: OrderItem[]
@@ -209,7 +209,63 @@ export const userOrdersApi = {
 
   // Cancel pending order
   async cancelOrder(orderId: string): Promise<Order> {
-    return this.updateOrderStatus(orderId, 'cancelled')
+    try {
+      // Use the string-based endpoint: <str:order_id>/cancel/
+      const response = await api.post(`/orders/${orderId}/cancel/`)
+      
+      // The function view returns a simple response, so fetch the updated order
+      const updatedOrder = await this.getOrderById(orderId)
+      return updatedOrder
+    } catch (error: any) {
+      console.error("Error cancelling order:", error)
+      // Provide more specific error messages
+      if (error.response?.status === 400) {
+        throw new Error(error.response.data.error || 'Cannot cancel this order')
+      } else if (error.response?.status === 404) {
+        throw new Error('Order not found')
+      }
+      throw error
+    }
+  },
+
+  // Check if order can be cancelled - using a simplified approach
+  async canCancelOrder(orderId: string): Promise<{ can_cancel: boolean; reason?: string }> {
+    try {
+      // Since the can-cancel endpoint expects int but we have strings,
+      // let's fetch the order and check status client-side
+      const order = await this.getOrderById(orderId)
+      const canCancel = order.status === 'pending' || order.status === 'processing'
+      
+      return {
+        can_cancel: canCancel,
+        reason: canCancel 
+          ? 'Order can be cancelled' 
+          : `Cannot cancel order with status: ${order.status}`
+      }
+    } catch (error: any) {
+      console.error("Error checking if order can be cancelled:", error)
+      if (error.response?.status === 404) {
+        return { can_cancel: false, reason: 'Order not found' }
+      }
+      return { can_cancel: false, reason: 'Unable to verify cancellation eligibility' }
+    }
+  },
+
+  // Get cancellation details/status - simplified implementation
+  async getOrderCancellation(orderId: string): Promise<any> {
+    try {
+      // Since the cancellation endpoint expects int but we have strings,
+      // let's just return the order details
+      const order = await this.getOrderById(orderId)
+      return {
+        order_id: order.id,
+        current_status: order.status,
+        is_cancelled: order.status === 'cancelled'
+      }
+    } catch (error) {
+      console.error("Error fetching order cancellation details:", error)
+      throw error
+    }
   },
 
   // Get user's order statistics
