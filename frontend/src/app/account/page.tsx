@@ -1187,30 +1187,7 @@ export default function AccountPage() {
           </TabsContent>
 
           <TabsContent value="wishlist">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Heart className="h-5 w-5 mr-2 text-red-500 fill-current" />
-                  My Wishlist
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  View and manage your saved products
-                </p>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground mb-4">
-                    Your wishlist items will be displayed here.
-                  </p>
-                  <Link href="/wishlist">
-                    <Button>
-                      <Heart className="h-4 w-4 mr-2" />
-                      View Full Wishlist
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
+            <WishlistSummary />
           </TabsContent>
         </Tabs>
 
