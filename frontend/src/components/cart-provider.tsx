@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react"
 import { cartService, type Cart, type CartItem as APICartItem, type AddToCartData } from "@/lib/services/cart"
 import { useAuth } from "@/components/auth-provider"
 
@@ -59,7 +59,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [user])
 
-  const refreshCart = async () => {
+  const refreshCart = useCallback(async () => {
     if (!user) return
     
     try {
@@ -74,7 +74,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
 
   const addItem = async (newItem: Omit<CartItem, "quantity" | "itemId"> & { productId: number; color?: string; storage?: string }) => {
     if (!user) {
@@ -148,7 +148,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const clearCart = async () => {
+  const clearCart = useCallback(async () => {
     if (!user) return
 
     try {
@@ -162,7 +162,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
 
   const total = items.reduce((sum: number, item: CartItem) => sum + item.price * item.quantity, 0)
 

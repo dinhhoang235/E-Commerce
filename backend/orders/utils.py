@@ -173,13 +173,21 @@ class OrderManager:
         Raises:
             ValidationError: If order cannot be cancelled
         """
+        print(f"DEBUG: Attempting to cancel order {order.id}, current status: {order.status}")
+        print(f"DEBUG: Order can_be_cancelled: {order.can_be_cancelled}")
+        
         if not order.can_be_cancelled:
             raise ValidationError(f"Cannot cancel order {order.id} with status: {order.status}")
         
         with transaction.atomic():
+            # Store the original status for debugging
+            original_status = order.status
+            
             # Set status to cancelled (signals will handle stock restoration)
             order.status = 'cancelled'
             order.save(update_fields=['status'])
+            
+            print(f"DEBUG: Order {order.id} status changed from {original_status} to {order.status}")
         
         return True
     

@@ -8,23 +8,24 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, CreditCard, Truck, Shield, ArrowLeft } from "lucide-react"
+import { Loader2, Truck, Shield, ArrowLeft, CreditCard } from "lucide-react"
 import { useCart } from "@/components/cart-provider"
 import { useAuth } from "@/components/auth-provider"
 import { useToast } from "@/hooks/use-toast"
+import DirectPaymentButton from "@/components/direct-payment-button"
 import { userOrdersApi } from "@/lib/services/orders"
-import { createAddress } from "@/lib/services/auth"
 
 export default function CheckoutPage() {
-  const { items, total, clearCart } = useCart()
+  const { items, total } = useCart()
   const { user } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
   const [isProcessing, setIsProcessing] = useState(false)
-  const [step, setStep] = useState(1) // 1: Shipping, 2: Payment, 3: Review
+  const [step, setStep] = useState(1) // 1: Shipping, 2: Review, 3: Payment
   const [isLoading, setIsLoading] = useState(true)
+  const [pendingOrder, setPendingOrder] = useState<any>(null)
+  const [timeLeft, setTimeLeft] = useState<number>(60) // 1 minute in seconds
 
   const [shippingData, setShippingData] = useState({
     firstName: user?.first_name || "",
@@ -38,160 +39,118 @@ export default function CheckoutPage() {
     country: user?.address?.country || "Vietnam",
   })
 
-  const [paymentData, setPaymentData] = useState({
-    cardNumber: "",
-    expiryDate: "",
-    cvv: "",
-    nameOnCard: "",
-    billingAddressSame: true,
-  })
-
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  // Format card number with spaces
-  const formatCardNumber = (value: string) => {
-    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '')
-    const matches = v.match(/\d{4,16}/g)
-    const match = matches && matches[0] || ''
-    const parts = []
+  // Calculate tax and final total
+  const tax = total * 0.1 // 10% tax rate
+  const finalTotal = total + tax
 
-    for (let i = 0, len = match.length; i < len; i += 4) {
-      parts.push(match.substring(i, i + 4))
-    }
-
-    if (parts.length) {
-      return parts.join(' ')
-    } else {
-      return v
-    }
-  }
-
-  // Format expiry date
-  const formatExpiryDate = (value: string) => {
-    const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '')
-    if (v.length >= 2) {
-      return `${v.substring(0, 2)}/${v.substring(2, 4)}`
-    }
-    return v
-  }
-
-  // Get placeholder text for state field based on country
-  const getStatePlaceholder = (country: string) => {
-    switch (country) {
-      case 'United States':
-        return 'e.g., California, New York'
-      case 'Canada':
-        return 'e.g., Ontario, Quebec'
-      case 'United Kingdom':
-        return 'e.g., England, Scotland'
-      case 'Australia':
-        return 'e.g., New South Wales, Victoria'
-      case 'Vietnam':
-        return 'e.g., Ho Chi Minh City, Hanoi'
-      default:
-        return 'Enter state or province'
-    }
-  }
-
-  // Get placeholder text for ZIP/postal code field based on country
-  const getZipPlaceholder = (country: string) => {
-    switch (country) {
-      case 'United States':
-        return 'e.g., 12345 or 12345-6789'
-      case 'Canada':
-        return 'e.g., K1A 0A6'
-      case 'United Kingdom':
-        return 'e.g., SW1A 1AA'
-      case 'Vietnam':
-        return 'e.g., 700000'
-      default:
-        return 'Enter postal code'
-    }
-  }
-
-  // Update shipping data when user data changes
   useEffect(() => {
-    if (user) {
-      setShippingData(prev => ({
-        ...prev,
-        firstName: user.first_name || prev.firstName,
-        lastName: user.last_name || prev.lastName,
-        email: user.email || prev.email,
-        phone: user.phone || prev.phone,
-        address: user.address?.address_line1 || prev.address,
-        city: user.address?.city || prev.city,
-        state: user.address?.state || prev.state,
-        zipCode: user.address?.zip_code || prev.zipCode,
-        country: user.address?.country || prev.country,
-      }))
+    if (user !== undefined) {
+      setIsLoading(false)
     }
   }, [user])
 
-  // Redirect if cart is empty
+  // Countdown timer effect for payment step
   useEffect(() => {
-    if (items.length === 0) {
-      router.push("/products")
-    } else {
-      setIsLoading(false)
+    let timer: NodeJS.Timeout
+    
+    if (step === 3 && pendingOrder && timeLeft > 0) {
+      timer = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            // Time's up - call cancel API directly and redirect to payment timeout page
+            handleTimeoutCancel()
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
     }
-  }, [items, router])
 
-  // Redirect if not logged in
-  useEffect(() => {
-    if (!user) {
-      router.push("/login?redirect=/checkout")
-    } else {
-      setIsLoading(false)
+    return () => {
+      if (timer) {
+        clearInterval(timer)
+      }
     }
-  }, [user, router])
+  }, [step, pendingOrder, timeLeft, toast, router, finalTotal])
 
-  const shipping = 0 // Free shipping
-  const tax = total * 0.08 // 8% tax
-  const finalTotal = total + shipping + tax
+  // Handle timeout cancellation - call cancel API when countdown reaches zero
+  const handleTimeoutCancel = async () => {
+    try {
+      if (pendingOrder?.id) {
+        // Call cancel API directly
+        await userOrdersApi.cancelOrder(pendingOrder.id)
+        console.log(`Order ${pendingOrder.id} cancelled due to timeout`)
+      }
+    } catch (error) {
+      console.error('Error cancelling order on timeout:', error)
+    } finally {
+      // Always redirect to timeout page regardless of API success/failure
+      toast({
+        variant: "destructive",
+        title: "Payment Timeout",
+        description: "Payment time has expired. Your order has been cancelled.",
+      })
+      const params = new URLSearchParams()
+      if (pendingOrder?.id) params.set('orderId', pendingOrder.id)
+      if (finalTotal) params.set('total', finalTotal.toFixed(2))
+      router.push(`/payment-timeout?${params.toString()}`)
+    }
+  }
+
+  // Format time display
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60)
+    const remainingSeconds = seconds % 60
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
+  }
+
+  // Calculate progress percentage (0-100)
+  const getProgressPercentage = () => {
+    return (timeLeft / 60) * 100
+  }
+
+  // Helper functions for formatting
+  const getStatePlaceholder = (country: string) => {
+    switch (country) {
+      case "US":
+        return "State"
+      case "CA":
+        return "Province"
+      case "GB":
+        return "County"
+      default:
+        return "State/Province"
+    }
+  }
+
+  const getZipPlaceholder = (country: string) => {
+    switch (country) {
+      case "US":
+        return "12345"
+      case "CA":
+        return "K1A 0A6"
+      case "GB":
+        return "SW1A 1AA"
+      default:
+        return "Postal Code"
+    }
+  }
 
   const validateStep = (stepNumber: number) => {
     const newErrors: Record<string, string> = {}
 
     if (stepNumber === 1) {
-      if (!shippingData.firstName) newErrors.firstName = "First name is required"
-      if (!shippingData.lastName) newErrors.lastName = "Last name is required"
-      if (!shippingData.email) newErrors.email = "Email is required"
-      else if (!/\S+@\S+\.\S+/.test(shippingData.email)) newErrors.email = "Please enter a valid email address"
-      if (!shippingData.address) newErrors.address = "Address is required"
-      if (!shippingData.city) newErrors.city = "City is required"
-      if (!shippingData.state) newErrors.state = "State/Province is required"
-      if (!shippingData.zipCode) newErrors.zipCode = "ZIP/Postal code is required"
-      else if (shippingData.country === "United States" && !/^\d{5}(-\d{4})?$/.test(shippingData.zipCode)) {
-        newErrors.zipCode = "Please enter a valid US ZIP code"
-      } else if (shippingData.zipCode.length < 3) {
-        newErrors.zipCode = "Please enter a valid postal code"
-      }
-    }
-
-    if (stepNumber === 2) {
-      // Credit card validation
-      const cardNumber = paymentData.cardNumber.replace(/\s/g, '')
-      if (!paymentData.cardNumber) newErrors.cardNumber = "Card number is required"
-      else if (!/^\d{13,19}$/.test(cardNumber)) newErrors.cardNumber = "Please enter a valid card number"
-      
-      if (!paymentData.expiryDate) newErrors.expiryDate = "Expiry date is required"
-      else if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(paymentData.expiryDate)) {
-        newErrors.expiryDate = "Please enter date in MM/YY format"
-      } else {
-        // Check if card is expired
-        const [month, year] = paymentData.expiryDate.split('/')
-        const expiry = new Date(parseInt(`20${year}`), parseInt(month) - 1)
-        const now = new Date()
-        if (expiry < now) {
-          newErrors.expiryDate = "Card has expired"
-        }
-      }
-      
-      if (!paymentData.cvv) newErrors.cvv = "CVV is required"
-      else if (!/^\d{3,4}$/.test(paymentData.cvv)) newErrors.cvv = "CVV must be 3 or 4 digits"
-      
-      if (!paymentData.nameOnCard) newErrors.nameOnCard = "Name on card is required"
-      else if (paymentData.nameOnCard.length < 2) newErrors.nameOnCard = "Please enter a valid name"
+      // Validate shipping information
+      if (!shippingData.firstName.trim()) newErrors.firstName = "First name is required"
+      if (!shippingData.lastName.trim()) newErrors.lastName = "Last name is required"
+      if (!shippingData.email.trim()) newErrors.email = "Email is required"
+      else if (!/\S+@\S+\.\S+/.test(shippingData.email)) newErrors.email = "Email is invalid"
+      if (!shippingData.address.trim()) newErrors.address = "Address is required"
+      if (!shippingData.city.trim()) newErrors.city = "City is required"
+      if (!shippingData.state.trim()) newErrors.state = "State/Province is required"
+      if (!shippingData.zipCode.trim()) newErrors.zipCode = "ZIP/Postal code is required"
     }
 
     setErrors(newErrors)
@@ -204,133 +163,63 @@ export default function CheckoutPage() {
     }
   }
 
-  const handlePlaceOrder = async () => {
-    if (!validateStep(2)) return
-
-    // Additional validation - ensure cart is not empty
-    if (items.length === 0) {
-      toast({
-        title: "Cart is empty",
-        description: "Please add items to your cart before placing an order.",
-        variant: "destructive",
-      })
-      router.push("/products")
-      return
-    }
-
-    setIsProcessing(true)
-
+  const handleCreatePendingOrder = async () => {
     try {
-      let shippingAddressId = user?.address?.id
-
-      // If user doesn't have an address, create one from shipping data
-      if (!shippingAddressId) {
-        try {
-          // Map country names to codes
-          const countryMapping: Record<string, string> = {
-            'Vietnam': 'VN',
-            'United States': 'US',
-            'Canada': 'CA',
-            'United Kingdom': 'GB',
-            'Australia': 'AU',
-            'Germany': 'DE',
-            'France': 'FR',
-            'Japan': 'JP',
-            'South Korea': 'KR',
-            'Singapore': 'SG',
-            'Thailand': 'TH',
-            'Malaysia': 'MY',
-            'Philippines': 'PH',
-            'Indonesia': 'ID',
-            'China': 'CN',
-            'India': 'IN',
-            // Also handle if already in code format
-            'VN': 'VN',
-            'US': 'US',
-            'CA': 'CA',
-            'GB': 'GB',
-            'AU': 'AU',
-            'DE': 'DE',
-            'FR': 'FR',
-            'JP': 'JP',
-            'KR': 'KR',
-            'SG': 'SG',
-            'TH': 'TH',
-            'MY': 'MY',
-            'PH': 'PH',
-            'ID': 'ID',
-            'CN': 'CN',
-            'IN': 'IN'
-          }
-
-          const newAddress = await createAddress({
-            first_name: shippingData.firstName,
-            last_name: shippingData.lastName,
-            phone: shippingData.phone,
-            address_line1: shippingData.address,
-            city: shippingData.city,
-            state: shippingData.state,
-            zip_code: shippingData.zipCode,
-            country: countryMapping[shippingData.country] || shippingData.country,
-            is_default: true
-          })
-          shippingAddressId = newAddress.id
-        } catch (addressError) {
-          console.error("Failed to create address:", addressError)
-          // Continue without address ID, backend will handle it
-        }
-      }
-
-      // Create order data
+      setIsProcessing(true)
+      
+      // Create order in pending state
       const orderData = {
+        shipping_address: {
+          first_name: shippingData.firstName,
+          last_name: shippingData.lastName,
+          email: shippingData.email,
+          phone: shippingData.phone,
+          address_line1: shippingData.address,
+          city: shippingData.city,
+          state: shippingData.state,
+          zip_code: shippingData.zipCode,
+          country: shippingData.country,
+        },
         shipping_method: "standard" as const,
-        ...(shippingAddressId && { shipping_address_id: shippingAddressId })
+        items: items.map(item => ({
+          product_id: item.id,
+          quantity: item.quantity
+        }))
       }
 
-      // Create order from cart using real API
       const order = await userOrdersApi.createOrderFromCart(orderData)
-
-      // Clear cart on successful order creation
-      clearCart()
-
+      setPendingOrder(order)
+      setTimeLeft(60) // Reset timer to 1 minute
+      setStep(3) // Move to payment step
+      
       toast({
-        title: "Order placed successfully!",
-        description: `Order #${order.id} has been created. Thank you for your purchase!`,
+        title: "Order Created",
+        description: `Order #${order.id} has been created. Please complete payment within 1 minute.`,
       })
-
-      // Redirect to order confirmation with order ID
-      router.push(`/order-confirmation?orderId=${order.id}`)
     } catch (error: any) {
-      console.error("Order creation failed:", error)
-      
-      // Handle specific error cases
-      let errorMessage = "Failed to place order. Please try again."
-      
-      if (error.response?.status === 400) {
-        const errorData = error.response.data
-        if (errorData?.error) {
-          errorMessage = errorData.error
-        } else if (errorData?.detail) {
-          errorMessage = errorData.detail
-        } else {
-          errorMessage = "Invalid order data. Please check your information."
-        }
-      } else if (error.response?.status === 401) {
-        errorMessage = "Please log in to place an order."
-        router.push("/login?redirect=/checkout")
-        return
-      } else if (error.response?.status === 404) {
-        errorMessage = "Cart is empty or products are no longer available."
-      }
-
+      console.error("Error creating order:", error)
       toast({
-        title: "Order failed",
-        description: errorMessage,
         variant: "destructive",
+        title: "Order Creation Failed",
+        description: error.message || "Failed to create order. Please try again.",
       })
     } finally {
       setIsProcessing(false)
     }
+  }
+
+  const handlePaymentStart = () => {
+    setIsProcessing(true)
+    console.log("Payment started - order will be created after successful payment")
+  }
+
+  const handlePaymentError = (error: string) => {
+    setIsProcessing(false)
+    toast({
+      variant: "destructive",
+      title: "Payment Error",
+      description: error,
+    })
   }
 
   if (!user || items.length === 0 || isLoading) {
@@ -368,7 +257,7 @@ export default function CheckoutPage() {
                   {stepNumber}
                 </div>
                 <span className={`ml-2 text-sm ${step >= stepNumber ? "text-blue-600" : "text-slate-600"}`}>
-                  {stepNumber === 1 ? "Shipping" : stepNumber === 2 ? "Payment" : "Review"}
+                  {stepNumber === 1 ? "Shipping" : stepNumber === 2 ? "Review" : "Payment"}
                 </span>
                 {stepNumber < 3 && <div className="w-8 h-px bg-slate-200 mx-4" />}
               </div>
@@ -504,122 +393,34 @@ export default function CheckoutPage() {
                   </div>
                 </div>
 
-                <Button onClick={handleNext} className="w-full bg-blue-600 hover:bg-blue-700">
-                  Continue to Payment
+                <Button 
+                  onClick={handleNext} 
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  disabled={isProcessing}
+                >
+                  Continue to Review
                 </Button>
               </CardContent>
             </Card>
           )}
 
-          {/* Step 2: Payment Information */}
+          {/* Step 2: Review Order */}
           {step === 2 && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <CreditCard className="mr-2 h-5 w-5" />
-                  Payment Information
+                  Review Order
                 </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="cardNumber">Card Number *</Label>
-                  <Input
-                    id="cardNumber"
-                    placeholder="1234 5678 9012 3456"
-                    value={paymentData.cardNumber}
-                    onChange={(e) => {
-                      const formatted = formatCardNumber(e.target.value)
-                      setPaymentData((prev) => ({ ...prev, cardNumber: formatted }))
-                    }}
-                    maxLength={19}
-                    className={errors.cardNumber ? "border-red-500" : ""}
-                  />
-                  {errors.cardNumber && <p className="text-sm text-red-500">{errors.cardNumber}</p>}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="expiryDate">Expiry Date *</Label>
-                    <Input
-                      id="expiryDate"
-                      placeholder="MM/YY"
-                      value={paymentData.expiryDate}
-                      onChange={(e) => {
-                        const formatted = formatExpiryDate(e.target.value)
-                        setPaymentData((prev) => ({ ...prev, expiryDate: formatted }))
-                      }}
-                      maxLength={5}
-                      className={errors.expiryDate ? "border-red-500" : ""}
-                    />
-                    {errors.expiryDate && <p className="text-sm text-red-500">{errors.expiryDate}</p>}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="cvv">CVV *</Label>
-                    <Input
-                      id="cvv"
-                      placeholder="123"
-                      value={paymentData.cvv}
-                      onChange={(e) => {
-                        const value = e.target.value.replace(/[^0-9]/g, '')
-                        setPaymentData((prev) => ({ ...prev, cvv: value }))
-                      }}
-                      maxLength={4}
-                      className={errors.cvv ? "border-red-500" : ""}
-                    />
-                    {errors.cvv && <p className="text-sm text-red-500">{errors.cvv}</p>}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="nameOnCard">Name on Card *</Label>
-                  <Input
-                    id="nameOnCard"
-                    value={paymentData.nameOnCard}
-                    onChange={(e) => setPaymentData((prev) => ({ ...prev, nameOnCard: e.target.value }))}
-                    className={errors.nameOnCard ? "border-red-500" : ""}
-                  />
-                  {errors.nameOnCard && <p className="text-sm text-red-500">{errors.nameOnCard}</p>}
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="billingAddressSame"
-                    checked={paymentData.billingAddressSame}
-                    onCheckedChange={(checked) =>
-                      setPaymentData((prev) => ({ ...prev, billingAddressSame: checked as boolean }))
-                    }
-                  />
-                  <Label htmlFor="billingAddressSame" className="text-sm">
-                    Billing address is the same as shipping address
-                  </Label>
-                </div>
-
-                <div className="flex space-x-4">
-                  <Button variant="outline" onClick={() => setStep(1)} className="flex-1">
-                    Back to Shipping
-                  </Button>
-                  <Button onClick={handleNext} className="flex-1 bg-blue-600 hover:bg-blue-700">
-                    Review Order
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Step 3: Review Order */}
-          {step === 3 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Shield className="mr-2 h-5 w-5" />
-                  Review Your Order
-                </CardTitle>
+                <p className="text-sm text-slate-600">
+                  Please review your order details before proceeding to payment.
+                </p>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Shipping Address */}
                 <div>
                   <h3 className="font-medium mb-2">Shipping Address</h3>
-                  <div className="text-sm text-slate-600">
+                  <div className="text-sm text-slate-600 bg-slate-50 p-3 rounded-lg">
                     <p>
                       {shippingData.firstName} {shippingData.lastName}
                     </p>
@@ -628,17 +429,6 @@ export default function CheckoutPage() {
                       {shippingData.city}, {shippingData.state} {shippingData.zipCode}
                     </p>
                     <p>{shippingData.country}</p>
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* Payment Method */}
-                <div>
-                  <h3 className="font-medium mb-2">Payment Method</h3>
-                  <div className="text-sm text-slate-600">
-                    <p>**** **** **** {paymentData.cardNumber.replace(/\s/g, '').slice(-4)}</p>
-                    <p>{paymentData.nameOnCard}</p>
                   </div>
                 </div>
 
@@ -671,17 +461,181 @@ export default function CheckoutPage() {
                   </div>
                 </div>
 
+                <Separator />
+
+                {/* Order Summary */}
+                <div className="bg-slate-50 p-4 rounded-lg">
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span>Subtotal</span>
+                      <span>${total.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Shipping</span>
+                      <span className="text-green-600">Free</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Tax</span>
+                      <span>${tax.toFixed(2)}</span>
+                    </div>
+                    <Separator />
+                    <div className="flex justify-between font-bold text-base">
+                      <span>Total</span>
+                      <span>${finalTotal.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="flex space-x-4">
-                  <Button variant="outline" onClick={() => setStep(2)} className="flex-1">
-                    Back to Payment
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setStep(1)} 
+                    className="flex-1"
+                    disabled={isProcessing}
+                  >
+                    Back to Shipping
                   </Button>
-                  <Button
-                    onClick={handlePlaceOrder}
+                  <Button 
+                    onClick={handleCreatePendingOrder} 
                     className="flex-1 bg-blue-600 hover:bg-blue-700"
                     disabled={isProcessing}
                   >
-                    {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {isProcessing ? "Processing..." : "Place Order"}
+                    {isProcessing ? "Creating Order..." : "Proceed to Payment"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Step 3: Payment */}
+          {step === 3 && pendingOrder && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <Shield className="mr-2 h-5 w-5" />
+                    Payment
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <div className={`w-2 h-2 rounded-full animate-pulse ${
+                      timeLeft > 60 ? 'bg-green-500' : timeLeft > 30 ? 'bg-yellow-500' : 'bg-red-500'
+                    }`}></div>
+                    <span className={`text-sm font-mono ${
+                      timeLeft > 60 ? 'text-green-600' : timeLeft > 30 ? 'text-yellow-600' : 'text-red-600'
+                    }`}>
+                      {formatTime(timeLeft)}
+                    </span>
+                  </div>
+                </CardTitle>
+                <p className="text-sm text-slate-600">
+                  Your order #{pendingOrder.id} has been created. Complete payment within the remaining time to confirm your order.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className={`border p-4 rounded-lg ${
+                  timeLeft > 60 ? 'bg-yellow-50 border-yellow-200' : 'bg-red-50 border-red-200'
+                }`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-2">
+                      <div className={`w-2 h-2 rounded-full animate-pulse ${
+                        timeLeft > 60 ? 'bg-yellow-500' : 'bg-red-500'
+                      }`}></div>
+                      <span className={`font-medium ${
+                        timeLeft > 60 ? 'text-yellow-800' : 'text-red-800'
+                      }`}>
+                        {timeLeft > 60 ? 'Payment Required' : 'Payment Expiring Soon!'}
+                      </span>
+                    </div>
+                    <span className={`font-mono text-lg font-bold ${
+                      timeLeft > 60 ? 'text-yellow-900' : 'text-red-900'
+                    }`}>
+                      {formatTime(timeLeft)}
+                    </span>
+                  </div>
+                  
+                  {/* Progress Bar */}
+                  <div className="mb-3">
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className={timeLeft > 60 ? 'text-yellow-700' : 'text-red-700'}>
+                        Time Remaining
+                      </span>
+                      <span className={timeLeft > 60 ? 'text-yellow-700' : 'text-red-700'}>
+                        {Math.round(getProgressPercentage())}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full transition-all duration-1000 ${
+                          timeLeft > 60 ? 'bg-yellow-500' : timeLeft > 30 ? 'bg-orange-500' : 'bg-red-500'
+                        }`}
+                        style={{ width: `${getProgressPercentage()}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                  
+                  <p className={`text-sm ${
+                    timeLeft > 60 ? 'text-yellow-700' : 'text-red-700'
+                  }`}>
+                    {timeLeft > 60 
+                      ? 'Please complete your payment within the time limit. After this time, your order will be automatically cancelled.'
+                      : 'Hurry! Your payment time is about to expire. Complete payment now to secure your order.'
+                    }
+                  </p>
+                </div>
+
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <Shield className="h-5 w-5 text-blue-600" />
+                    <span className="font-medium text-blue-900">Secure Payment with Stripe</span>
+                  </div>
+                  <p className="text-sm text-blue-800">
+                    Your payment information is securely processed by Stripe.
+                  </p>
+                </div>
+
+                <DirectPaymentButton
+                  shippingAddress={shippingData}
+                  shippingMethod="standard"
+                  onPaymentStart={handlePaymentStart}
+                  onPaymentError={handlePaymentError}
+                  className="w-full"
+                  disabled={isProcessing || timeLeft <= 0}
+                >
+                  {isProcessing ? "Processing..." : timeLeft <= 0 ? "Payment Expired" : `Pay $${finalTotal.toFixed(2)} with Stripe`}
+                </DirectPaymentButton>
+
+                {timeLeft <= 0 && (
+                  <div className="bg-red-50 border border-red-200 p-4 rounded-lg">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                      <span className="font-medium text-red-800">Payment Expired</span>
+                    </div>
+                    <p className="text-sm text-red-700 mb-3">
+                      The payment time limit has expired. Your order has been automatically cancelled and items have been returned to stock.
+                    </p>
+                    <Button 
+                      onClick={() => {
+                        const params = new URLSearchParams()
+                        if (pendingOrder?.id) params.set('orderId', pendingOrder.id)
+                        if (finalTotal) params.set('total', finalTotal.toFixed(2))
+                        router.push(`/payment-timeout?${params.toString()}`)
+                      }} 
+                      variant="outline" 
+                      className="w-full"
+                    >
+                      View Details
+                    </Button>
+                  </div>
+                )}
+
+                <div className="flex space-x-4">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setStep(2)} 
+                    className="flex-1"
+                    disabled={isProcessing || timeLeft <= 0}
+                  >
+                    Back to Review
                   </Button>
                 </div>
               </CardContent>
@@ -693,10 +647,68 @@ export default function CheckoutPage() {
         <div className="lg:col-span-1">
           <Card className="sticky top-24">
             <CardHeader>
-              <CardTitle>Order Summary</CardTitle>
+              <CardTitle className="flex items-center justify-between">
+                <span>Order Summary</span>
+                {step === 3 && pendingOrder && (
+                  <div className="flex items-center space-x-2">
+                    <div className={`w-2 h-2 rounded-full animate-pulse ${
+                      timeLeft > 60 ? 'bg-green-500' : timeLeft > 30 ? 'bg-yellow-500' : 'bg-red-500'
+                    }`}></div>
+                    <span className={`text-xs font-mono ${
+                      timeLeft > 60 ? 'text-green-600' : timeLeft > 30 ? 'text-yellow-600' : 'text-red-600'
+                    }`}>
+                      {formatTime(timeLeft)}
+                    </span>
+                  </div>
+                )}
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Items */}
+              {/* Payment Timer Alert */}
+              {step === 3 && pendingOrder && (
+                <div className={`p-3 rounded-lg border ${
+                  timeLeft > 60 ? 'bg-green-50 border-green-200' : 
+                  timeLeft > 30 ? 'bg-yellow-50 border-yellow-200' : 'bg-red-50 border-red-200'
+                }`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`text-xs font-medium ${
+                      timeLeft > 60 ? 'text-green-800' : 
+                      timeLeft > 30 ? 'text-yellow-800' : 'text-red-800'
+                    }`}>
+                      Payment Time
+                    </span>
+                    <span className={`text-sm font-mono font-bold ${
+                      timeLeft > 60 ? 'text-green-900' : 
+                      timeLeft > 30 ? 'text-yellow-900' : 'text-red-900'
+                    }`}>
+                      {formatTime(timeLeft)}
+                    </span>
+                  </div>
+                  
+                  {/* Mini Progress Bar */}
+                  <div className="mb-2">
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div 
+                        className={`h-1.5 rounded-full transition-all duration-1000 ${
+                          timeLeft > 60 ? 'bg-green-500' : 
+                          timeLeft > 30 ? 'bg-yellow-500' : 'bg-red-500'
+                        }`}
+                        style={{ width: `${getProgressPercentage()}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                  
+                  <p className={`text-xs ${
+                    timeLeft > 60 ? 'text-green-700' : 
+                    timeLeft > 30 ? 'text-yellow-700' : 'text-red-700'
+                  }`}>
+                    {timeLeft > 60 ? 'Complete payment soon' : 
+                     timeLeft > 30 ? 'Payment expiring soon!' : 'Payment about to expire!'}
+                  </p>
+                </div>
+              )}
+
+              {/* Order Items */}
               <div className="space-y-3">
                 {items.map((item) => (
                   <div key={item.id} className="flex justify-between text-sm">

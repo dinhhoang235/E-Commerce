@@ -65,9 +65,9 @@ class Order(models.Model):
     
     @property
     def can_be_cancelled(self):
-        """Check if order can be cancelled (stock can be restored)"""
+        """Check if order can be cancelled"""
         return self.status in ['pending', 'processing']
-    
+
     def cancel_order(self):
         """Cancel the order and restore stock for all items"""
         if not self.can_be_cancelled:

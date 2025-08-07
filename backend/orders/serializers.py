@@ -4,6 +4,7 @@ from .models import Order, OrderItem
 from products.models import Product
 from users.models import Address
 from cart.models import CartItem
+from .utils import OrderManager
 import uuid
 from datetime import datetime
 
@@ -94,9 +95,6 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         items_data = validated_data.pop('items', [])
         shipping_address_id = validated_data.pop('shipping_address_id', None)
         
-        # Generate order ID
-        order_id = f"APL{str(uuid.uuid4())[:6].upper()}"
-        
         # Get shipping address
         shipping_address = None
         if shipping_address_id:
@@ -112,47 +110,23 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("No items in cart to create order")
             items_data = [{'product_id': item.product.id, 'quantity': item.quantity} for item in cart_items]
         
-        # Calculate total
-        total = 0
-        order_items = []
-        
-        for item_data in items_data:
-            try:
-                product = Product.objects.get(id=item_data['product_id'])
-                quantity = item_data.get('quantity', 1)
-                price = product.price
-                total += price * quantity
-                order_items.append({
-                    'product': product,
-                    'quantity': quantity,
-                    'price': price
-                })
-            except Product.DoesNotExist:
-                raise serializers.ValidationError(f"Product with id {item_data['product_id']} not found")
-        
-        # Create order
-        order = Order.objects.create(
-            id=order_id,
-            user=user,
-            shipping_address=shipping_address,
-            shipping_method=validated_data.get('shipping_method', 'standard'),
-            total=total
-        )
-        
-        # Create order items
-        for item_data in order_items:
-            OrderItem.objects.create(
-                order=order,
-                product=item_data['product'],
-                quantity=item_data['quantity'],
-                price=item_data['price']
+        # Use OrderManager to create order with proper payment deadline
+        try:
+            order = OrderManager.create_order(
+                user=user,
+                items_data=items_data,
+                shipping_address=shipping_address,
+                shipping_method=validated_data.get('shipping_method', 'standard')
             )
-        
-        # Clear cart if items were from cart
-        if not validated_data.get('items'):
-            CartItem.objects.filter(cart__user=user).delete()
-        
-        return order
+            
+            # Clear cart if items were from cart
+            if not validated_data.get('items'):
+                CartItem.objects.filter(cart__user=user).delete()
+            
+            return order
+            
+        except Exception as e:
+            raise serializers.ValidationError(f"Failed to create order: {str(e)}")
 
 
 class OrderStatusUpdateSerializer(serializers.ModelSerializer):

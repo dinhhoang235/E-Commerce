@@ -251,6 +251,17 @@ export const userOrdersApi = {
     }
   },
 
+  // Check payment status and automatically cancel if expired
+  async checkPaymentStatus(orderId: string): Promise<{ expired: boolean; status: string; is_paid?: boolean; payment_deadline?: string; message?: string }> {
+    try {
+      const response = await api.get(`/orders/${orderId}/check-payment/`)
+      return response.data
+    } catch (error: any) {
+      console.error("Error checking payment status:", error)
+      throw error
+    }
+  },
+
   // Get cancellation details/status - simplified implementation
   async getOrderCancellation(orderId: string): Promise<any> {
     try {

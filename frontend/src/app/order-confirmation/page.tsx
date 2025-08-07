@@ -10,6 +10,7 @@ import { CheckCircle, Package, Truck, ArrowLeft, Download, Loader2 } from "lucid
 import { userOrdersApi, type Order } from "@/lib/services/orders"
 import { useAuth } from "@/components/auth-provider"
 import { useToast } from "@/hooks/use-toast"
+import PaymentStatusCard from "@/components/payment-status-card"
 
 export default function OrderConfirmationPage() {
   const router = useRouter()
@@ -174,6 +175,15 @@ export default function OrderConfirmationPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Payment Status */}
+        <div className="mb-6">
+          <PaymentStatusCard 
+            orderId={order.id}
+            autoRefresh={true}
+            refreshInterval={10000}
+          />
+        </div>
 
         {/* Order Items */}
         <Card className="mb-6">

@@ -439,6 +439,40 @@ def stock_monitoring(request):
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
+def update_order_payment_status(request, order_id):
+    """
+    Update order payment status and change status to processing
+    """
+    try:
+        order = get_object_or_404(Order, id=order_id, user=request.user)
+        
+        # Check if order is in correct status
+        if order.status != 'pending':
+            return Response(
+                {'error': f'Cannot update payment for order with status: {order.status}'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update order to processing and mark as paid
+        order.status = 'processing'
+        order.is_paid = True
+        order.save(update_fields=['status', 'is_paid'])
+        
+        serializer = OrderSerializer(order)
+        return Response({
+            'message': 'Payment successful. Order is now being processed.',
+            'order': serializer.data
+        })
+        
+    except Exception as e:
+        return Response(
+            {'error': f'Failed to update payment status: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
 def validate_cart_stock(request):
     """
     Validate stock availability for items in user's cart before checkout
@@ -664,4 +698,3 @@ class OrderCancellationView(generics.GenericAPIView):
                 'error': f'Failed to cancel order: {str(e)}',
                 'order_id': kwargs.get('order_id')
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
