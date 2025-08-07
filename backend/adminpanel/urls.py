@@ -9,7 +9,9 @@ from .views import (
     AnalyticsDashboardView,
     StoreSettingsView,
     StoreSettingsPartialView,
-    ProductStatsView
+    ProductStatsView,
+    PaymentTransactionsView,
+    PaymentStatsView
 )
 
 urlpatterns = [
@@ -21,6 +23,10 @@ urlpatterns = [
     path("analytics/traffic/", TrafficSourcesView.as_view(), name="admin-analytics-traffic"),
     path("analytics/conversion/", ConversionRateView.as_view(), name="admin-analytics-conversion"),
     path("analytics/dashboard/", AnalyticsDashboardView.as_view(), name="admin-analytics-dashboard"),
+    
+    # Payment endpoints
+    path("payments/", PaymentTransactionsView.as_view(), name="admin-payments"),
+    path("payments/stats/", PaymentStatsView.as_view(), name="admin-payments-stats"),
     
     # Settings endpoints
     path("settings/", StoreSettingsView.as_view(), name="store-settings"),

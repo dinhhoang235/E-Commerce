@@ -17,6 +17,33 @@ export interface PaymentError {
   error: string
 }
 
+export interface PaymentTransaction {
+  id: number
+  order_id: number
+  stripe_checkout_id: string
+  stripe_payment_intent: string | null
+  amount: string
+  status: 'pending' | 'success' | 'failed' | 'refunded'
+  created_at: string
+  order?: {
+    id: number
+    user: {
+      first_name: string
+      last_name: string
+      email: string
+    }
+  }
+}
+
+export interface PaymentStats {
+  total_transactions: number
+  total_amount: number
+  successful_transactions: number
+  pending_transactions: number
+  failed_transactions: number
+  refunded_transactions: number
+}
+
 export interface CartItem {
   product_id: number
   name: string
@@ -130,6 +157,39 @@ class PaymentService {
     
     const urlParams = new URLSearchParams(window.location.search)
     return urlParams.get('session_id')
+  }
+
+  // Admin methods
+  /**
+   * Get all payment transactions (admin only)
+   */
+  async getAdminPaymentTransactions(): Promise<PaymentTransaction[]> {
+    try {
+      const response = await api.get('/admin/payments/')
+      return response.data
+    } catch (error: any) {
+      console.error('Error fetching payment transactions:', error)
+      throw new Error(
+        error.response?.data?.error || 
+        'Failed to fetch payment transactions'
+      )
+    }
+  }
+
+  /**
+   * Get payment statistics (admin only)
+   */
+  async getAdminPaymentStats(): Promise<PaymentStats> {
+    try {
+      const response = await api.get('/admin/payments/stats/')
+      return response.data
+    } catch (error: any) {
+      console.error('Error fetching payment stats:', error)
+      throw new Error(
+        error.response?.data?.error || 
+        'Failed to fetch payment stats'
+      )
+    }
   }
 }
 

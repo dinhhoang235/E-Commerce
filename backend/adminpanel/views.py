@@ -10,6 +10,7 @@ from decimal import Decimal
 from orders.models import Order, OrderItem
 from products.models import Product
 from users.models import Account
+from payments.models import PaymentTransaction
 from .models import StoreSettings
 from .serializers import StoreSettingsSerializer
 
@@ -473,5 +474,84 @@ class ProductStatsView(APIView):
         except Exception as e:
             return Response(
                 {'error': 'Failed to get product stats', 'detail': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class PaymentTransactionsView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+    
+    def get(self, request):
+        """Get all payment transactions with related order and user information"""
+        try:
+            transactions = PaymentTransaction.objects.select_related(
+                'order__user'
+            ).order_by('-created_at')
+            
+            transaction_data = []
+            for transaction in transactions:
+                data = {
+                    'id': transaction.id,
+                    'order_id': transaction.order.id,
+                    'stripe_checkout_id': transaction.stripe_checkout_id,
+                    'stripe_payment_intent': transaction.stripe_payment_intent,
+                    'amount': str(transaction.amount),
+                    'status': transaction.status,
+                    'created_at': transaction.created_at.isoformat(),
+                }
+                
+                # Add order and user information if available
+                if transaction.order and transaction.order.user:
+                    data['order'] = {
+                        'id': transaction.order.id,
+                        'user': {
+                            'first_name': transaction.order.user.first_name,
+                            'last_name': transaction.order.user.last_name,
+                            'email': transaction.order.user.email,
+                        }
+                    }
+                
+                transaction_data.append(data)
+            
+            return Response(transaction_data)
+            
+        except Exception as e:
+            return Response(
+                {'error': 'Failed to fetch payment transactions', 'detail': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class PaymentStatsView(APIView):
+    permission_classes = [permissions.IsAdminUser]
+    
+    def get(self, request):
+        """Get payment statistics"""
+        try:
+            total_transactions = PaymentTransaction.objects.count()
+            
+            # Total amount from all successful transactions
+            total_amount = PaymentTransaction.objects.filter(
+                status='success'
+            ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+            
+            # Count by status
+            successful_transactions = PaymentTransaction.objects.filter(status='success').count()
+            pending_transactions = PaymentTransaction.objects.filter(status='pending').count()
+            failed_transactions = PaymentTransaction.objects.filter(status='failed').count()
+            refunded_transactions = PaymentTransaction.objects.filter(status='refunded').count()
+            
+            return Response({
+                'total_transactions': total_transactions,
+                'total_amount': float(total_amount),
+                'successful_transactions': successful_transactions,
+                'pending_transactions': pending_transactions,
+                'failed_transactions': failed_transactions,
+                'refunded_transactions': refunded_transactions,
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': 'Failed to get payment stats', 'detail': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

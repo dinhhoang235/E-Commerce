@@ -27,6 +27,7 @@ import {
   User,
   Bell,
   FolderOpen,
+  CreditCard,
 } from "lucide-react"
 import { AdminProvider, useAdmin } from "@/components/admin-provider"
 
@@ -35,6 +36,7 @@ const navigation = [
   { name: "Products", href: "/admin/products", icon: Package },
   { name: "Categories", href: "/admin/categories", icon: FolderOpen },
   { name: "Orders", href: "/admin/orders", icon: ShoppingCart },
+  { name: "Payments", href: "/admin/payments", icon: CreditCard },
   { name: "Customers", href: "/admin/customers", icon: Users },
   { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
   { name: "Settings", href: "/admin/settings", icon: Settings },
