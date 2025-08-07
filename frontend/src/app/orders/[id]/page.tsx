@@ -21,8 +21,14 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<Order | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [imageErrors, setImageErrors] = useState<Set<number>>(new Set())
 
   const orderId = params.id as string
+
+  // Handle image load errors
+  const handleImageError = (itemId: number) => {
+    setImageErrors(prev => new Set(prev).add(itemId))
+  }
 
   // Handle order cancellation
   const handleOrderCancelled = (cancelledOrder: Order) => {
@@ -137,8 +143,19 @@ export default function OrderDetailPage() {
                   {order.items && order.items.length > 0 ? (
                     order.items.map((item) => (
                       <div key={item.id} className="flex items-center space-x-4 pb-4 border-b last:border-b-0">
-                        <div className="w-16 h-16 bg-slate-100 rounded-lg flex items-center justify-center">
-                          <Package className="w-8 h-8 text-slate-400" />
+                        <div className="w-16 h-16 bg-slate-100 rounded-lg flex items-center justify-center overflow-hidden">
+                          {item.product_image && !imageErrors.has(item.id) ? (
+                            <img
+                              src={item.product_image}
+                              alt={item.product_name}
+                              width={64}
+                              height={64}
+                              className="w-full h-full object-cover rounded-lg"
+                              onError={() => handleImageError(item.id)}
+                            />
+                          ) : (
+                            <Package className="w-8 h-8 text-slate-400" />
+                          )}
                         </div>
                         <div className="flex-1">
                           <h4 className="font-medium">{item.product_name}</h4>

@@ -12,11 +12,12 @@ from datetime import datetime
 class OrderItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_price = serializers.DecimalField(source='product.price', max_digits=10, decimal_places=2, read_only=True)
+    product_image = serializers.ImageField(source='product.image', read_only=True)
     
     class Meta:
         model = OrderItem
-        fields = ['id', 'product', 'product_name', 'quantity', 'price', 'product_price']
-        read_only_fields = ['id', 'product_name', 'product_price']
+        fields = ['id', 'product', 'product_name', 'quantity', 'price', 'product_price', 'product_image']
+        read_only_fields = ['id', 'product_name', 'product_price', 'product_image']
 
 
 class OrderSerializer(serializers.ModelSerializer):
