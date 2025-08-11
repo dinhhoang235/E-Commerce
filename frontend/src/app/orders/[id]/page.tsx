@@ -12,6 +12,7 @@ import { userOrdersApi, type Order } from "@/lib/services/orders"
 import { useToast } from "@/hooks/use-toast"
 import { CancelOrderButton } from "@/components/ui/cancel-order-button"
 import { OrderStatusBadge } from "@/components/ui/order-status-badge"
+import { PaymentStatusBadge } from "@/components/ui/payment-status-badge"
 
 export default function OrderDetailPage() {
   const { user } = useAuth()
@@ -225,6 +226,14 @@ export default function OrderDetailPage() {
                   <div className="flex justify-between text-sm">
                     <span>Email</span>
                     <span className="text-right break-all">{order.email}</span>
+                  </div>
+                  <div className="flex justify-between text-sm items-center">
+                    <span>Payment Status</span>
+                    <PaymentStatusBadge 
+                      status={order.payment_status || 'no_payment'} 
+                      isPaid={order.is_paid}
+                      className="text-xs"
+                    />
                   </div>
                 </div>
 

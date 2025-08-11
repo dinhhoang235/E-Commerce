@@ -10,6 +10,7 @@ from django.utils.decorators import method_decorator
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django.contrib.auth.models import User
 from rest_framework import status
 from django.utils import timezone
 from datetime import timedelta
@@ -566,7 +567,6 @@ def handle_successful_payment(session):
         
         try:
             # Get the existing order
-            from django.contrib.auth.models import User
             user = User.objects.get(id=user_id)
             order = Order.objects.get(id=order_id, user=user)
             
@@ -689,7 +689,7 @@ def payment_status(request, order_id):
         order = Order.objects.get(id=order_id, user=user)
         
         # Get the latest payment transaction
-        transaction = PaymentTransaction.objects.filter(order=order).order_by('-create_at').first()
+        transaction = PaymentTransaction.objects.filter(order=order).order_by('-created_at').first()
         
         if not transaction:
             return Response({
@@ -703,7 +703,7 @@ def payment_status(request, order_id):
             'order_status': order.status,
             'is_paid': order.is_paid,
             'amount': str(transaction.amount),
-            'created_at': transaction.create_at
+            'created_at': transaction.created_at.isoformat()
         })
         
     except Order.DoesNotExist:

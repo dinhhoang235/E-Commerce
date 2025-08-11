@@ -61,6 +61,11 @@ export default function PaymentStatusCard({
         return <XCircle className="h-5 w-5 text-red-600" />
       case 'pending':
         return <Clock className="h-5 w-5 text-yellow-600" />
+      case 'refunded':
+        return <RefreshCw className="h-5 w-5 text-blue-600" />
+      case 'canceled':
+      case 'cancelled':
+        return <XCircle className="h-5 w-5 text-gray-600" />
       default:
         return <AlertCircle className="h-5 w-5 text-gray-600" />
     }
@@ -74,6 +79,11 @@ export default function PaymentStatusCard({
         return 'bg-red-100 text-red-800'
       case 'pending':
         return 'bg-yellow-100 text-yellow-800'
+      case 'refunded':
+        return 'bg-blue-100 text-blue-800'
+      case 'canceled':
+      case 'cancelled':
+        return 'bg-gray-100 text-gray-800'
       default:
         return 'bg-gray-100 text-gray-800'
     }
@@ -87,6 +97,11 @@ export default function PaymentStatusCard({
         return 'Payment Failed'
       case 'pending':
         return 'Payment Pending'
+      case 'refunded':
+        return 'Payment Refunded'
+      case 'canceled':
+      case 'cancelled':
+        return 'Payment Cancelled'
       case 'no_payment':
         return 'No Payment'
       default:

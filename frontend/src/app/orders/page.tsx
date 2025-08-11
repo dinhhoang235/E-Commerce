@@ -11,6 +11,7 @@ import { userOrdersApi, type Order } from "@/lib/services/orders"
 import { useToast } from "@/hooks/use-toast"
 import { CancelOrderButton } from "@/components/ui/cancel-order-button"
 import { OrderStatusBadge } from "@/components/ui/order-status-badge"
+import { PaymentStatusBadge } from "@/components/ui/payment-status-badge"
 
 export default function OrdersPage() {
   const { user } = useAuth()
@@ -113,7 +114,14 @@ export default function OrdersPage() {
                           Placed on {new Date(order.date).toLocaleDateString()}
                         </p>
                       </div>
-                      <OrderStatusBadge status={order.status} />
+                      <div className="flex flex-col gap-2 items-end">
+                        <OrderStatusBadge status={order.status} />
+                        <PaymentStatusBadge 
+                          status={order.payment_status || 'no_payment'} 
+                          isPaid={order.is_paid}
+                          className="text-xs"
+                        />
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>

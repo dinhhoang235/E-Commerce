@@ -26,6 +26,8 @@ export interface Order {
   date: string
   shipping: ShippingInfo
   items?: OrderItem[]
+  is_paid?: boolean
+  payment_status?: "pending" | "success" | "failed" | "refunded" | "canceled" | "cancelled" | "no_payment"
 }
 
 export interface OrderCreateData {

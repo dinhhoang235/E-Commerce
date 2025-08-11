@@ -6,7 +6,7 @@ export interface PaymentSession {
 }
 
 export interface PaymentStatus {
-  status: 'pending' | 'success' | 'failed' | 'no_payment'
+  status: 'pending' | 'success' | 'failed' | 'refunded' | 'canceled' | 'cancelled' | 'no_payment'
   order_status: string
   is_paid: boolean
   amount?: string
@@ -23,7 +23,7 @@ export interface PaymentTransaction {
   stripe_checkout_id: string
   stripe_payment_intent: string | null
   amount: string
-  status: 'pending' | 'success' | 'failed' | 'refunded'
+  status: 'pending' | 'success' | 'failed' | 'refunded' | 'canceled' | 'cancelled'
   created_at: string
   order?: {
     id: number

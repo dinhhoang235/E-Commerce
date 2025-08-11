@@ -3,11 +3,12 @@ from django.db import models
 # Create your models here.
 
 STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('success', 'Success'),
-        ('failed', 'Failed'),
-        ('refunded', 'Refunded'),
-    ]
+    ('pending', 'Pending'),
+    ('success', 'Success'),
+    ('failed', 'Failed'),
+    ('refunded', 'Refunded'),
+    ('canceled', 'Canceled'), 
+]
 
 class PaymentTransaction(models.Model):
     order = models.ForeignKey('orders.Order', on_delete=models.CASCADE, related_name='payments')

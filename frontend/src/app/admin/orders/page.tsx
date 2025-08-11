@@ -18,6 +18,7 @@ import {
 import { Search, Eye, Package, Truck, CheckCircle } from "lucide-react"
 import { adminOrdersApi, type Order, type OrderStats } from "@/lib/services/orders"
 import { useToast } from "@/hooks/use-toast"
+import { PaymentStatusBadge } from "@/components/ui/payment-status-badge"
 
 export default function AdminOrdersPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -291,6 +292,7 @@ export default function AdminOrdersPage() {
                 <TableHead>Products</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Payment</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -320,6 +322,13 @@ export default function AdminOrdersPage() {
                       {getStatusIcon(order.status)}
                       {order.status}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <PaymentStatusBadge 
+                      status={order.payment_status || 'no_payment'} 
+                      isPaid={order.is_paid}
+                      className="text-xs"
+                    />
                   </TableCell>
                   <TableCell>{new Date(order.date).toLocaleDateString()}</TableCell>
                   <TableCell>

@@ -28,17 +28,26 @@ class OrderSerializer(serializers.ModelSerializer):
     products = serializers.ListField(source='products_list', read_only=True)
     date = serializers.DateTimeField(format='%Y-%m-%d', read_only=True)
     shipping = serializers.SerializerMethodField()
+    payment_status = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
-        fields = ['id', 'customer', 'email', 'products', 'total', 'status', 'date', 'shipping', 'items']
-        read_only_fields = ['id', 'customer', 'email', 'products', 'date', 'shipping']
+        fields = ['id', 'customer', 'email', 'products', 'total', 'status', 'date', 'shipping', 'items', 'is_paid', 'payment_status']
+        read_only_fields = ['id', 'customer', 'email', 'products', 'date', 'shipping', 'is_paid', 'payment_status']
     
     def get_shipping(self, obj):
         return {
             'address': obj.shipping_address_formatted,
             'method': obj.shipping_method_display
         }
+    
+    def get_payment_status(self, obj):
+        """Get the latest payment status from payment transactions"""
+        from payments.models import PaymentTransaction
+        latest_transaction = PaymentTransaction.objects.filter(order=obj).order_by('-created_at').first()
+        if latest_transaction:
+            return latest_transaction.status
+        return 'no_payment'
 
 
 class AdminOrderSerializer(serializers.ModelSerializer):
@@ -48,17 +57,26 @@ class AdminOrderSerializer(serializers.ModelSerializer):
     products = serializers.ListField(source='products_list', read_only=True)
     date = serializers.DateTimeField(format='%Y-%m-%d', read_only=True)
     shipping = serializers.SerializerMethodField()
+    payment_status = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
-        fields = ['id', 'customer', 'email', 'products', 'total', 'status', 'date', 'shipping']
-        read_only_fields = ['id', 'customer', 'email', 'products', 'date', 'shipping']
+        fields = ['id', 'customer', 'email', 'products', 'total', 'status', 'date', 'shipping', 'is_paid', 'payment_status']
+        read_only_fields = ['id', 'customer', 'email', 'products', 'date', 'shipping', 'is_paid', 'payment_status']
     
     def get_shipping(self, obj):
         return {
             'address': obj.shipping_address_formatted,
             'method': obj.shipping_method_display
         }
+    
+    def get_payment_status(self, obj):
+        """Get the latest payment status from payment transactions"""
+        from payments.models import PaymentTransaction
+        latest_transaction = PaymentTransaction.objects.filter(order=obj).order_by('-created_at').first()
+        if latest_transaction:
+            return latest_transaction.status
+        return 'no_payment'
 
 
 class OrderDetailSerializer(serializers.ModelSerializer):
@@ -69,17 +87,26 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     products = serializers.ListField(source='products_list', read_only=True)
     date = serializers.DateTimeField(format='%Y-%m-%d', read_only=True)
     shipping = serializers.SerializerMethodField()
+    payment_status = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
-        fields = ['id', 'customer', 'email', 'products', 'total', 'status', 'date', 'shipping', 'items']
-        read_only_fields = ['id', 'customer', 'email', 'products', 'date', 'shipping']
+        fields = ['id', 'customer', 'email', 'products', 'total', 'status', 'date', 'shipping', 'items', 'is_paid', 'payment_status']
+        read_only_fields = ['id', 'customer', 'email', 'products', 'date', 'shipping', 'is_paid', 'payment_status']
     
     def get_shipping(self, obj):
         return {
             'address': obj.shipping_address_formatted,
             'method': obj.shipping_method_display
         }
+    
+    def get_payment_status(self, obj):
+        """Get the latest payment status from payment transactions"""
+        from payments.models import PaymentTransaction
+        latest_transaction = PaymentTransaction.objects.filter(order=obj).order_by('-created_at').first()
+        if latest_transaction:
+            return latest_transaction.status
+        return 'no_payment'
 
 
 class OrderCreateSerializer(serializers.ModelSerializer):
