@@ -194,7 +194,7 @@ def create_order_from_cart(request):
 @permission_classes([permissions.IsAuthenticated])
 def user_order_history(request):
     """
-    Get user's order history with pagination
+    Get user's order history with pagination and pending payment info
     """
     orders = Order.objects.filter(user=request.user).order_by('-date')
     
@@ -546,7 +546,15 @@ class CancelOrderView(generics.GenericAPIView):
             # Store original status for response
             original_status = order.status
             
-            # Use OrderManager to cancel order with stock restoration
+            # Check pending payments before cancellation
+            from payments.models import PaymentTransaction
+            pending_payments = PaymentTransaction.objects.filter(
+                order=order, 
+                status='pending'
+            )
+            pending_payments_count = pending_payments.count()
+            
+            # Use OrderManager to cancel order with stock restoration and payment cancellation
             OrderManager.cancel_order(order)
             
             # Return detailed response for frontend
@@ -559,7 +567,8 @@ class CancelOrderView(generics.GenericAPIView):
                     'current_status': 'cancelled',
                     'total_refund': float(order.total),
                     'cancelled_at': order.updated_at.isoformat() if hasattr(order, 'updated_at') else None,
-                    'items_count': order.items.count()
+                    'items_count': order.items.count(),
+                    'payments_cancelled': pending_payments_count
                 }
             }, status=status.HTTP_200_OK)
             

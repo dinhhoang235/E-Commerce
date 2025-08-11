@@ -3,6 +3,7 @@ import api from "@/lib/api"
 export interface PaymentSession {
   checkout_url: string
   session_id: string
+  order_id?: string
 }
 
 export interface PaymentStatus {
@@ -104,6 +105,24 @@ class PaymentService {
       throw new Error(
         error.response?.data?.error || 
         'Failed to create payment session'
+      )
+    }
+  }
+
+  /**
+   * Continue payment for an existing pending order
+   */
+  async continuePayment(orderId: string): Promise<PaymentSession> {
+    try {
+      const response = await api.post('/payments/continue-payment/', {
+        order_id: orderId
+      })
+      return response.data
+    } catch (error: any) {
+      console.error('Error continuing payment:', error)
+      throw new Error(
+        error.response?.data?.error || 
+        'Failed to continue payment'
       )
     }
   }

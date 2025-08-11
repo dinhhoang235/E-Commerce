@@ -240,6 +240,10 @@ def create_checkout_session_from_cart(request):
             )
             logger.info(f"Created new payment transaction for order {order_id}")
         
+        # Save checkout URL to order for future reference
+        order.checkout_url = session.url
+        order.save(update_fields=['checkout_url'])
+        
         return Response({
             'checkout_url': session.url,
             'session_id': session.id,
@@ -335,6 +339,7 @@ def verify_payment_and_create_order(request):
         # Update order status to processing and mark as paid
         order.status = 'processing'
         order.is_paid = True
+        order.checkout_url = None  # Clear checkout URL after successful payment
         order.save()
         
         # Update payment transaction status
@@ -469,6 +474,10 @@ def create_checkout_session(request):
                 status='pending'
             )
         
+        # Save checkout URL to order for future reference
+        order.checkout_url = session.url
+        order.save(update_fields=['checkout_url'])
+        
         return Response({
             'checkout_url': session.url,
             'session_id': session.id
@@ -573,6 +582,7 @@ def handle_successful_payment(session):
             # Update order status to processing and mark as paid
             order.status = 'processing'
             order.is_paid = True
+            order.checkout_url = None  # Clear checkout URL after successful payment
             order.save()
             
             # Update payment transaction status
@@ -618,6 +628,12 @@ def handle_expired_payment(session):
             transaction.status = 'failed'
             transaction.save()
             
+            # Clear checkout URL from order since session expired
+            order = transaction.order
+            if order.checkout_url:
+                order.checkout_url = None
+                order.save(update_fields=['checkout_url'])
+            
             logger.info(f"Payment session expired for transaction {transaction.id}")
             
         except PaymentTransaction.DoesNotExist:
@@ -648,6 +664,7 @@ def handle_payment_intent_succeeded(payment_intent):
             if not order.is_paid:
                 order.is_paid = True
                 order.status = 'processing'
+                order.checkout_url = None  # Clear checkout URL after successful payment
                 order.save()
             
             logger.info(f"Payment intent succeeded for order {order.id}")
@@ -676,6 +693,77 @@ def handle_payment_failed(payment_intent):
             
     except Exception as e:
         logger.error(f"Error handling payment failed: {str(e)}")
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def continue_payment(request):
+    """
+    Continue payment for an existing pending order
+    Expected payload: {'order_id': 'order_id'}
+    """
+    try:
+        user = request.user
+        order_id = request.data.get('order_id')
+        
+        if not order_id:
+            return Response(
+                {'error': 'Order ID is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get the order
+        try:
+            order = Order.objects.get(id=order_id, user=user)
+        except Order.DoesNotExist:
+            return Response(
+                {'error': 'Order not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if order is pending payment
+        if order.is_paid:
+            return Response(
+                {'error': 'Order is already paid'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if order.status != 'pending':
+            return Response(
+                {'error': 'Order is not in pending status'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if there's an existing valid checkout session
+        existing_transaction = PaymentTransaction.objects.filter(
+            order=order, 
+            status='pending'
+        ).first()
+        
+        if existing_transaction and order.checkout_url:
+            # Check if the existing Stripe session is still valid
+            try:
+                session = stripe.checkout.Session.retrieve(existing_transaction.stripe_checkout_id)
+                if session.status == 'open':
+                    return Response({
+                        'checkout_url': session.url,
+                        'session_id': session.id,
+                        'order_id': order_id
+                    })
+            except stripe.error.StripeError:
+                # Session is invalid, we'll create a new one
+                pass
+        
+        # Create new checkout session using the existing create_checkout_session logic
+        # This will reuse the existing order items
+        return create_checkout_session(request)
+        
+    except Exception as e:
+        logger.error(f"Unexpected error in continue_payment: {str(e)}")
+        return Response(
+            {'error': 'An unexpected error occurred'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 @api_view(['GET'])

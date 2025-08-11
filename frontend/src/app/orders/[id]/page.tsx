@@ -11,6 +11,7 @@ import { useAuth } from "@/components/auth-provider"
 import { userOrdersApi, type Order } from "@/lib/services/orders"
 import { useToast } from "@/hooks/use-toast"
 import { CancelOrderButton } from "@/components/ui/cancel-order-button"
+import { ContinuePaymentButton } from "@/components/ui/continue-payment-button"
 import { OrderStatusBadge } from "@/components/ui/order-status-badge"
 import { PaymentStatusBadge } from "@/components/ui/payment-status-badge"
 
@@ -262,7 +263,16 @@ export default function OrderDetailPage() {
                 </div>
 
                 {/* Order Actions */}
-                <div className="pt-4">
+                <div className="pt-4 space-y-3">
+                  {/* Continue Payment Button - Show for pending orders */}
+                  {order.can_continue_payment && (
+                    <ContinuePaymentButton 
+                      order={order}
+                      className="w-full"
+                    />
+                  )}
+                  
+                  {/* Cancel Order Button */}
                   <CancelOrderButton 
                     order={order}
                     onOrderCancelled={handleOrderCancelled}

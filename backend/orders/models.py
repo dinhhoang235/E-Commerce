@@ -28,6 +28,7 @@ class Order(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     date = models.DateTimeField(auto_now_add=True)
     is_paid = models.BooleanField(default=False)
+    checkout_url = models.URLField(max_length=500, null=True, blank=True, help_text="Stripe checkout session URL for pending payments")
     
     def __str__(self):
         return f"{self.id} - {self.user.username}"
@@ -67,6 +68,14 @@ class Order(models.Model):
     def can_be_cancelled(self):
         """Check if order can be cancelled"""
         return self.status in ['pending', 'processing']
+    
+    @property
+    def has_pending_payment(self):
+        """Check if order has a pending payment with valid checkout URL"""
+        return (self.status == 'pending' and 
+                not self.is_paid and 
+                self.checkout_url and 
+                self.payments.filter(status='pending').exists())
 
     def cancel_order(self):
         """Cancel the order and restore stock for all items"""

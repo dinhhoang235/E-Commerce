@@ -163,6 +163,7 @@ class OrderManager:
     def cancel_order(order):
         """
         Cancel an order and restore stock for all items.
+        Also cancels associated payments if they are pending.
         
         Args:
             order: Order instance
@@ -187,7 +188,20 @@ class OrderManager:
             order.status = 'cancelled'
             order.save(update_fields=['status'])
             
+            # Cancel associated payments that are pending
+            from payments.models import PaymentTransaction
+            pending_payments = PaymentTransaction.objects.filter(
+                order=order, 
+                status='pending'
+            )
+            
+            for payment in pending_payments:
+                payment.status = 'canceled'
+                payment.save(update_fields=['status'])
+                print(f"DEBUG: Payment {payment.id} status changed to canceled for order {order.id}")
+            
             print(f"DEBUG: Order {order.id} status changed from {original_status} to {order.status}")
+            print(f"DEBUG: Cancelled {pending_payments.count()} pending payments for order {order.id}")
         
         return True
     

@@ -10,6 +10,7 @@ import { useAuth } from "@/components/auth-provider"
 import { userOrdersApi, type Order } from "@/lib/services/orders"
 import { useToast } from "@/hooks/use-toast"
 import { CancelOrderButton } from "@/components/ui/cancel-order-button"
+import { ContinuePaymentButton } from "@/components/ui/continue-payment-button"
 import { OrderStatusBadge } from "@/components/ui/order-status-badge"
 import { PaymentStatusBadge } from "@/components/ui/payment-status-badge"
 
@@ -89,7 +90,16 @@ export default function OrdersPage() {
     <div className="min-h-screen flex flex-col">
       <div className="container mx-auto px-4 py-8 flex-1">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-3xl font-bold mb-8">Order History</h1>
+          <h1 className="text-3xl font-bold mb-2">Order History</h1>
+          
+          {/* Pending Payment Notice */}
+          {orders.some(order => order.can_continue_payment) && (
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                💡 You have orders with pending payments. Click "Pay Now" to complete your purchase.
+              </p>
+            </div>
+          )}
 
           {orders.length === 0 ? (
             <Card>
@@ -132,13 +142,23 @@ export default function OrdersPage() {
                         </p>
                         <p className="font-bold">${parseFloat(order.total).toFixed(2)}</p>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
                         <Button variant="outline" size="sm" asChild>
                           <Link href={`/orders/${order.id}`}>
                             <Eye className="w-4 h-4 mr-2" />
                             View Details
                           </Link>
                         </Button>
+                        
+                        {/* Continue Payment Button for pending orders */}
+                        {order.can_continue_payment && (
+                          <ContinuePaymentButton 
+                            order={order}
+                            variant="outline"
+                            size="sm"
+                          />
+                        )}
+                        
                         <CancelOrderButton 
                           order={order}
                           onOrderCancelled={handleOrderCancelled}

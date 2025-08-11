@@ -28,6 +28,8 @@ export interface Order {
   items?: OrderItem[]
   is_paid?: boolean
   payment_status?: "pending" | "success" | "failed" | "refunded" | "canceled" | "cancelled" | "no_payment"
+  has_pending_payment?: boolean
+  can_continue_payment?: boolean
 }
 
 export interface OrderCreateData {

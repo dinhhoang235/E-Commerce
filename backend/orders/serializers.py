@@ -29,11 +29,13 @@ class OrderSerializer(serializers.ModelSerializer):
     date = serializers.DateTimeField(format='%Y-%m-%d', read_only=True)
     shipping = serializers.SerializerMethodField()
     payment_status = serializers.SerializerMethodField()
+    has_pending_payment = serializers.BooleanField(read_only=True)
+    can_continue_payment = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
-        fields = ['id', 'customer', 'email', 'products', 'total', 'status', 'date', 'shipping', 'items', 'is_paid', 'payment_status']
-        read_only_fields = ['id', 'customer', 'email', 'products', 'date', 'shipping', 'is_paid', 'payment_status']
+        fields = ['id', 'customer', 'email', 'products', 'total', 'status', 'date', 'shipping', 'items', 'is_paid', 'payment_status', 'has_pending_payment', 'can_continue_payment']
+        read_only_fields = ['id', 'customer', 'email', 'products', 'date', 'shipping', 'is_paid', 'payment_status', 'has_pending_payment', 'can_continue_payment']
     
     def get_shipping(self, obj):
         return {
@@ -48,6 +50,10 @@ class OrderSerializer(serializers.ModelSerializer):
         if latest_transaction:
             return latest_transaction.status
         return 'no_payment'
+    
+    def get_can_continue_payment(self, obj):
+        """Check if user can continue payment for this order"""
+        return obj.status == 'pending' and not obj.is_paid
 
 
 class AdminOrderSerializer(serializers.ModelSerializer):
