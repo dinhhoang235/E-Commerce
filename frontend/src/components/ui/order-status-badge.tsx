@@ -21,6 +21,8 @@ export function OrderStatusBadge({ status, className }: OrderStatusBadgeProps) {
         return "outline"
       case "cancelled":
         return "destructive"
+      case "refunded":
+        return "outline"
       default:
         return "secondary"
     }
@@ -38,6 +40,8 @@ export function OrderStatusBadge({ status, className }: OrderStatusBadgeProps) {
         return "Completed"
       case "cancelled":
         return "Cancelled"
+      case "refunded":
+        return "Refunded"
       case "delivered":
         return "Delivered"
       default:
@@ -57,6 +61,8 @@ export function OrderStatusBadge({ status, className }: OrderStatusBadgeProps) {
         return "Order has been completed"
       case "cancelled":
         return "Order has been cancelled"
+      case "refunded":
+        return "Order has been refunded"
       case "delivered":
         return "Order has been delivered"
       default:

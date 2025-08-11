@@ -22,7 +22,7 @@ export interface Order {
   email: string
   products: string[]
   total: string
-  status: "pending" | "processing" | "shipped" | "completed" | "cancelled" | "delivered"
+  status: "pending" | "processing" | "shipped" | "completed" | "cancelled" | "delivered" | "refunded"
   date: string
   shipping: ShippingInfo
   items?: OrderItem[]

@@ -101,8 +101,8 @@ export function CancelOrderButton({
     }
   }
 
-  // Don't show button for already cancelled orders or if order is completed/delivered
-  if (order.status === 'cancelled' || order.status === 'completed' || order.status === 'delivered') {
+  // Don't show button for already cancelled orders or if order is completed/delivered/refunded
+  if (order.status === 'cancelled' || order.status === 'completed' || order.status === 'delivered' || order.status === 'refunded') {
     return null
   }
 

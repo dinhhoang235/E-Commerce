@@ -10,4 +10,6 @@ urlpatterns = [
     path('verify-payment/', views.verify_payment_and_create_order, name='verify_payment_and_create_order'),
     path('webhook/', views.stripe_webhook, name='stripe_webhook'),
     path('status/<str:order_id>/', views.payment_status, name='payment_status'),
+    path('refund/', views.process_full_refund, name='process_full_refund'),
+    path('refund-status/<str:order_id>/', views.refund_status, name='refund_status'),
 ]

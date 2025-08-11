@@ -551,6 +551,18 @@ def stripe_webhook(request):
         payment_intent = event['data']['object']
         handle_payment_failed(payment_intent)
     
+    elif event['type'] == 'charge.dispute.created':
+        dispute = event['data']['object']
+        handle_chargeback_created(dispute)
+    
+    elif event['type'] == 'refund.created':
+        refund = event['data']['object']
+        handle_refund_created(refund)
+    
+    elif event['type'] == 'refund.updated':
+        refund = event['data']['object']
+        handle_refund_updated(refund)
+    
     else:
         logger.info(f"Unhandled event type: {event['type']}")
     
@@ -695,6 +707,128 @@ def handle_payment_failed(payment_intent):
         logger.error(f"Error handling payment failed: {str(e)}")
 
 
+def handle_chargeback_created(dispute):
+    """
+    Handle chargeback/dispute created event
+    """
+    try:
+        charge_id = dispute.get('charge')
+        if not charge_id:
+            logger.error("No charge ID found in dispute event")
+            return
+        
+        # Find the payment transaction by charge ID or payment intent
+        # Note: We may need to enhance the model to store charge_id if needed
+        transaction = PaymentTransaction.objects.filter(
+            stripe_payment_intent__isnull=False,
+            status='success'
+        ).first()  # This is a simplified lookup, could be enhanced
+        
+        if transaction:
+            # Mark the transaction as disputed
+            # You might want to add a 'disputed' status to STATUS_CHOICES
+            logger.warning(f"Chargeback created for order {transaction.order.id}, charge: {charge_id}")
+            # Additional logic to handle chargeback (notify admin, update order status, etc.)
+            
+    except Exception as e:
+        logger.error(f"Error handling chargeback created: {str(e)}")
+
+
+def handle_refund_created(refund):
+    """
+    Handle refund created event from Stripe webhook
+    """
+    try:
+        refund_id = refund['id']
+        charge_id = refund.get('charge')
+        payment_intent_id = refund.get('payment_intent')
+        amount_refunded = refund['amount'] / 100  # Convert from cents
+        
+        # Find the original transaction
+        transaction = None
+        if payment_intent_id:
+            transaction = PaymentTransaction.objects.filter(
+                stripe_payment_intent=payment_intent_id,
+                status='success'
+            ).first()
+        
+        if not transaction:
+            logger.error(f"No transaction found for refund {refund_id}")
+            return
+        
+        # Check if we already have a refund record for this specific Stripe refund
+        existing_refund = PaymentTransaction.objects.filter(
+            stripe_payment_intent=refund_id
+        ).first()
+        
+        if existing_refund:
+            logger.info(f"Refund transaction already exists for {refund_id}")
+            return
+        
+        # Check if transaction is already marked as refunded
+        if transaction.status == 'refunded':
+            logger.info(f"Transaction {transaction.id} is already marked as refunded")
+            return
+        
+        # Update original transaction status to refunded (no new transaction needed)
+        transaction.status = 'refunded'
+        transaction.save()
+        
+        # Update order status if full refund
+        order = transaction.order
+        if amount_refunded >= float(transaction.amount):
+            order.status = 'refunded'
+            order.is_paid = False
+            order.save()
+            
+            # Restore stock and reduce sold count for all items
+            for item in order.items.all():
+                try:
+                    product = item.product
+                    product.increase_stock(item.quantity)  # This handles both stock + and sold -
+                    logger.info(f"Restored {item.quantity} units to product {product.id} stock and reduced sold count due to refund")
+                except Exception as e:
+                    logger.error(f"Failed to restore stock for product {item.product.id}: {str(e)}")
+        
+        logger.info(f"Refund webhook processed for order {order.id}, refund: {refund_id}")
+        
+    except Exception as e:
+        logger.error(f"Error handling refund created: {str(e)}")
+
+
+def handle_refund_updated(refund):
+    """
+    Handle refund updated event from Stripe webhook
+    """
+    try:
+        refund_id = refund['id']
+        refund_status = refund['status']
+        
+        # Find the refund transaction
+        refund_transaction = PaymentTransaction.objects.filter(
+            stripe_payment_intent=refund_id
+        ).first()
+        
+        if not refund_transaction:
+            logger.error(f"No refund transaction found for {refund_id}")
+            return
+        
+        # Update refund transaction based on status
+        if refund_status == 'succeeded':
+            # Refund completed successfully
+            logger.info(f"Refund {refund_id} succeeded for order {refund_transaction.order.id}")
+        elif refund_status == 'failed':
+            # Refund failed - might need to revert changes
+            logger.error(f"Refund {refund_id} failed for order {refund_transaction.order.id}")
+            # You might want to update the transaction status or take other actions
+        elif refund_status == 'canceled':
+            # Refund was canceled
+            logger.info(f"Refund {refund_id} was canceled for order {refund_transaction.order.id}")
+        
+    except Exception as e:
+        logger.error(f"Error handling refund updated: {str(e)}")
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def continue_payment(request):
@@ -792,6 +926,194 @@ def payment_status(request, order_id):
             'is_paid': order.is_paid,
             'amount': str(transaction.amount),
             'created_at': transaction.created_at.isoformat()
+        })
+        
+    except Order.DoesNotExist:
+        return Response(
+            {'error': 'Order not found'}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def process_full_refund(request):
+    """
+    Process a full refund for an order
+    Expected payload: {'order_id': 'order_id', 'reason': 'refund_reason'}
+    """
+    try:
+        user = request.user
+        order_id = request.data.get('order_id')
+        refund_reason = request.data.get('reason', 'Customer requested refund')
+        
+        if not order_id:
+            return Response(
+                {'error': 'Order ID is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get the order
+        try:
+            order = Order.objects.get(id=order_id, user=user)
+        except Order.DoesNotExist:
+            return Response(
+                {'error': 'Order not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if order is eligible for refund
+        if not order.is_paid:
+            return Response(
+                {'error': 'Order has not been paid yet'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if order.status == 'cancelled':
+            return Response(
+                {'error': 'Order is already cancelled'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get the successful payment transaction
+        successful_transaction = PaymentTransaction.objects.filter(
+            order=order, 
+            status='success'
+        ).first()
+        
+        if not successful_transaction:
+            return Response(
+                {'error': 'No successful payment found for this order'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if already refunded
+        if successful_transaction.status == 'refunded':
+            return Response(
+                {'error': 'Order has already been refunded'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Also check if order status is already refunded
+        if order.status == 'refunded':
+            return Response(
+                {'error': 'Order has already been refunded'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Process refund with Stripe
+            if successful_transaction.stripe_payment_intent:
+                # Create refund using payment intent
+                refund = stripe.Refund.create(
+                    payment_intent=successful_transaction.stripe_payment_intent,
+                    amount=int(successful_transaction.amount * 100),  # Stripe uses cents
+                    metadata={
+                        'order_id': order_id,
+                        'user_id': str(user.id),
+                        'reason': refund_reason,
+                        'refund_type': 'full_refund'
+                    },
+                    reason='requested_by_customer'
+                )
+            else:
+                return Response(
+                    {'error': 'Cannot process refund: Payment intent not found'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Update the original transaction status to refunded (no new transaction needed)
+            successful_transaction.status = 'refunded'
+            successful_transaction.save()
+            
+            # Update order status
+            order.status = 'refunded'
+            order.is_paid = False  # Mark as not paid since it's refunded
+            order.save()
+            
+            # Restore product stock and reduce sold count for all items in the order
+            for item in order.items.all():
+                try:
+                    product = item.product
+                    product.increase_stock(item.quantity)  # This handles both stock + and sold -
+                    logger.info(f"Restored {item.quantity} units to product {product.id} stock and reduced sold count")
+                except Exception as e:
+                    logger.error(f"Failed to restore stock for product {item.product.id}: {str(e)}")
+            
+            logger.info(f"Full refund processed for order {order_id}. Refund ID: {refund['id']}")
+            
+            return Response({
+                'success': True,
+                'message': 'Full refund processed successfully',
+                'order_id': order_id,
+                'refund_id': refund['id'],
+                'refunded_amount': str(successful_transaction.amount),
+                'order_status': order.status,
+                'transaction_id': successful_transaction.id
+            })
+            
+        except stripe.error.StripeError as e:
+            logger.error(f"Stripe refund error for order {order_id}: {str(e)}")
+            return Response(
+                {'error': f'Refund processing failed: {str(e)}'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+    except Exception as e:
+        logger.error(f"Unexpected error in process_full_refund: {str(e)}")
+        return Response(
+            {'error': 'An unexpected error occurred while processing refund'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def refund_status(request, order_id):
+    """
+    Get refund status for an order
+    """
+    try:
+        user = request.user
+        order = Order.objects.get(id=order_id, user=user)
+        
+        # Get all payment transactions for this order
+        transactions = PaymentTransaction.objects.filter(order=order).order_by('-created_at')
+        
+        # Check for refunded transactions
+        refund_transaction = transactions.filter(status='refunded').first()
+        successful_transaction = transactions.filter(status='success').first()
+        
+        if not successful_transaction:
+            return Response({
+                'refund_status': 'no_payment',
+                'message': 'No successful payment found for this order'
+            })
+        
+        if refund_transaction:
+            return Response({
+                'refund_status': 'refunded',
+                'order_status': order.status,
+                'refunded_amount': str(abs(refund_transaction.amount)),
+                'refund_date': refund_transaction.created_at.isoformat(),
+                'original_amount': str(successful_transaction.amount),
+                'refund_transaction_id': refund_transaction.id
+            })
+        
+        # Check if order is eligible for refund
+        eligible_for_refund = (
+            order.is_paid and 
+            order.status not in ['cancelled'] and
+            successful_transaction.status == 'success'
+        )
+        
+        return Response({
+            'refund_status': 'not_refunded',
+            'order_status': order.status,
+            'is_paid': order.is_paid,
+            'eligible_for_refund': eligible_for_refund,
+            'original_amount': str(successful_transaction.amount),
+            'payment_date': successful_transaction.created_at.isoformat()
         })
         
     except Order.DoesNotExist:

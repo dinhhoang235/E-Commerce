@@ -12,6 +12,8 @@ import { userOrdersApi, type Order } from "@/lib/services/orders"
 import { useToast } from "@/hooks/use-toast"
 import { CancelOrderButton } from "@/components/ui/cancel-order-button"
 import { ContinuePaymentButton } from "@/components/ui/continue-payment-button"
+import { RefundButton } from "@/components/ui/refund-button"
+import { RefundStatusCard } from "@/components/ui/refund-status-card"
 import { OrderStatusBadge } from "@/components/ui/order-status-badge"
 import { PaymentStatusBadge } from "@/components/ui/payment-status-badge"
 
@@ -38,6 +40,25 @@ export default function OrderDetailPage() {
     toast({
       title: "Order Updated",
       description: "Order status has been updated.",
+    })
+  }
+
+  // Handle refund processed
+  const handleRefundProcessed = () => {
+    // Refresh the order data to reflect refund status
+    const fetchOrder = async () => {
+      try {
+        const orderData = await userOrdersApi.getOrderById(orderId)
+        setOrder(orderData)
+      } catch (error) {
+        console.error("Error refreshing order:", error)
+      }
+    }
+    fetchOrder()
+    
+    toast({
+      title: "Refund Processed",
+      description: "Your refund has been processed successfully.",
     })
   }
 
@@ -210,6 +231,9 @@ export default function OrderDetailPage() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Refund Status Card */}
+            <RefundStatusCard order={order} />
           </div>
 
           {/* Order Summary */}
@@ -271,6 +295,15 @@ export default function OrderDetailPage() {
                       className="w-full"
                     />
                   )}
+                  
+                  {/* Refund Button - Show for completed orders */}
+                  <RefundButton 
+                    order={order}
+                    onRefundProcessed={handleRefundProcessed}
+                    variant="outline"
+                    size="default"
+                    className="w-full"
+                  />
                   
                   {/* Cancel Order Button */}
                   <CancelOrderButton 

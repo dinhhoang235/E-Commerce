@@ -14,6 +14,29 @@ export interface PaymentStatus {
   created_at?: string
 }
 
+export interface RefundStatus {
+  refund_status: 'not_refunded' | 'refunded' | 'no_payment'
+  order_status: string
+  is_paid?: boolean
+  eligible_for_refund?: boolean
+  refunded_amount?: string
+  refund_date?: string
+  original_amount?: string
+  payment_date?: string
+  refund_transaction_id?: number
+  message?: string
+}
+
+export interface RefundResponse {
+  success: boolean
+  message: string
+  order_id: string
+  refund_id: string
+  refunded_amount: string
+  order_status: string
+  transaction_id: number
+}
+
 export interface PaymentError {
   error: string
 }
@@ -139,6 +162,41 @@ class PaymentService {
       throw new Error(
         error.response?.data?.error || 
         'Failed to get payment status'
+      )
+    }
+  }
+
+  /**
+   * Process a full refund for an order
+   */
+  async processFullRefund(orderId: string, reason: string = 'Customer requested refund'): Promise<RefundResponse> {
+    try {
+      const response = await api.post('/payments/refund/', {
+        order_id: orderId,
+        reason: reason
+      })
+      return response.data
+    } catch (error: any) {
+      console.error('Error processing refund:', error)
+      throw new Error(
+        error.response?.data?.error || 
+        'Failed to process refund'
+      )
+    }
+  }
+
+  /**
+   * Get refund status for an order
+   */
+  async getRefundStatus(orderId: string): Promise<RefundStatus> {
+    try {
+      const response = await api.get(`/payments/refund-status/${orderId}/`)
+      return response.data
+    } catch (error: any) {
+      console.error('Error getting refund status:', error)
+      throw new Error(
+        error.response?.data?.error || 
+        'Failed to get refund status'
       )
     }
   }

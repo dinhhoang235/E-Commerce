@@ -11,7 +11,8 @@ class Order(models.Model):
         ('processing', 'Processing'),
         ('shipped', 'Shipped'),
         ('completed', 'Completed'),
-        ('cancelled', 'Cancelled')
+        ('cancelled', 'Cancelled'),
+        ('refunded', 'Refunded')
     ]
     
     SHIPPING_METHOD_CHOICES = [

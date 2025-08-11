@@ -261,6 +261,7 @@ export default function AdminOrdersPage() {
                 <SelectItem value="shipped">Shipped</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
                 <SelectItem value="cancelled">Cancelled</SelectItem>
+                <SelectItem value="refunded">Refunded</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -367,6 +368,7 @@ export default function AdminOrdersPage() {
                                     <SelectItem value="shipped">Shipped</SelectItem>
                                     <SelectItem value="completed">Completed</SelectItem>
                                     <SelectItem value="cancelled">Cancelled</SelectItem>
+                                    <SelectItem value="refunded">Refunded</SelectItem>
                                   </SelectContent>
                                 </Select>
                               </div>
