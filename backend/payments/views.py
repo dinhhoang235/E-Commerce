@@ -1121,3 +1121,102 @@ def refund_status(request, order_id):
             {'error': 'Order not found'}, 
             status=status.HTTP_404_NOT_FOUND
         )
+
+
+def process_refund_for_cancelled_order(order, refund_reason="Order cancelled by customer"):
+    """
+    Helper function to process actual refund through Stripe when an order is cancelled.
+    This function is called from OrderManager.cancel_order()
+    
+    Args:
+        order: Order instance
+        refund_reason: Reason for the refund
+        
+    Returns:
+        dict: Result of refund operation with success status and details
+    """
+    try:
+        # Get the successful payment transaction
+        successful_transaction = PaymentTransaction.objects.filter(
+            order=order, 
+            status='success'
+        ).first()
+        
+        if not successful_transaction:
+            return {
+                'success': False,
+                'error': 'No successful payment found for this order',
+                'refund_processed': False
+            }
+        
+        # Check if already refunded
+        if successful_transaction.status == 'refunded':
+            return {
+                'success': True,
+                'message': 'Payment already refunded',
+                'refund_processed': False,
+                'already_refunded': True
+            }
+        
+        # Process refund with Stripe only if we have payment intent
+        if successful_transaction.stripe_payment_intent:
+            try:
+                # Create refund using payment intent
+                refund = stripe.Refund.create(
+                    payment_intent=successful_transaction.stripe_payment_intent,
+                    amount=int(successful_transaction.amount * 100),  # Stripe uses cents
+                    metadata={
+                        'order_id': order.id,
+                        'user_id': str(order.user.id),
+                        'reason': refund_reason,
+                        'refund_type': 'order_cancellation'
+                    },
+                    reason='requested_by_customer'
+                )
+                
+                # Update the transaction status to refunded
+                successful_transaction.status = 'refunded'
+                successful_transaction.save()
+                
+                logger.info(f"Refund processed for cancelled order {order.id}. Refund ID: {refund['id']}")
+                
+                return {
+                    'success': True,
+                    'message': 'Refund processed successfully through Stripe',
+                    'refund_processed': True,
+                    'refund_id': refund['id'],
+                    'refunded_amount': str(successful_transaction.amount),
+                    'transaction_id': successful_transaction.id
+                }
+                
+            except stripe.error.StripeError as e:
+                logger.error(f"Stripe refund error for cancelled order {order.id}: {str(e)}")
+                # Still mark as refunded in our system even if Stripe fails
+                successful_transaction.status = 'refunded'
+                successful_transaction.save()
+                
+                return {
+                    'success': False,
+                    'error': f'Stripe refund failed: {str(e)}',
+                    'refund_processed': False,
+                    'marked_as_refunded': True
+                }
+        else:
+            # No payment intent available, just mark as refunded in our system
+            successful_transaction.status = 'refunded'
+            successful_transaction.save()
+            
+            return {
+                'success': True,
+                'message': 'Payment marked as refunded (no payment intent available)',
+                'refund_processed': False,
+                'marked_as_refunded': True
+            }
+            
+    except Exception as e:
+        logger.error(f"Unexpected error processing refund for cancelled order {order.id}: {str(e)}")
+        return {
+            'success': False,
+            'error': f'Refund processing failed: {str(e)}',
+            'refund_processed': False
+        }

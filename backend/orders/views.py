@@ -554,8 +554,22 @@ class CancelOrderView(generics.GenericAPIView):
             )
             pending_payments_count = pending_payments.count()
             
-            # Use OrderManager to cancel order with stock restoration and payment cancellation
+            # Check successful payments that will be refunded
+            successful_payments = PaymentTransaction.objects.filter(
+                order=order, 
+                status='success'
+            )
+            successful_payments_count = successful_payments.count()
+            total_refund_amount = sum(float(payment.amount) for payment in successful_payments)
+            
+            # Use OrderManager to cancel order with stock restoration and payment processing
             OrderManager.cancel_order(order)
+            
+            # Check if refunds were actually processed
+            refunded_payments = PaymentTransaction.objects.filter(
+                order=order, 
+                status='refunded'
+            )
             
             # Return detailed response for frontend
             return Response({
@@ -566,9 +580,12 @@ class CancelOrderView(generics.GenericAPIView):
                     'previous_status': original_status,
                     'current_status': 'cancelled',
                     'total_refund': float(order.total),
+                    'actual_refund_amount': total_refund_amount,
                     'cancelled_at': order.updated_at.isoformat() if hasattr(order, 'updated_at') else None,
                     'items_count': order.items.count(),
-                    'payments_cancelled': pending_payments_count
+                    'payments_cancelled': pending_payments_count,
+                    'payments_refunded': refunded_payments.count(),
+                    'refund_processed': refunded_payments.count() > 0
                 }
             }, status=status.HTTP_200_OK)
             

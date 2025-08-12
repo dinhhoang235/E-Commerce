@@ -11,6 +11,17 @@ interface PaymentStatusBadgeProps {
 
 export function PaymentStatusBadge({ status, isPaid, className }: PaymentStatusBadgeProps) {
   const getStatusConfig = () => {
+    // First check for refunded status, regardless of isPaid
+    if (status === "refunded") {
+      return {
+        variant: "default" as const,
+        className: "bg-blue-100 text-blue-800",
+        icon: AlertCircle,
+        text: "Refunded"
+      }
+    }
+    
+    // Then check if paid (but not refunded)
     if (isPaid) {
       return {
         variant: "default" as const,
@@ -41,13 +52,6 @@ export function PaymentStatusBadge({ status, isPaid, className }: PaymentStatusB
           className: "bg-red-100 text-red-800",
           icon: XCircle,
           text: "Payment Failed"
-        }
-      case "refunded":
-        return {
-          variant: "default" as const,
-          className: "bg-blue-100 text-blue-800",
-          icon: AlertCircle,
-          text: "Refunded"
         }
       case "canceled":
       case "cancelled":

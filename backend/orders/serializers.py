@@ -44,8 +44,15 @@ class OrderSerializer(serializers.ModelSerializer):
         }
     
     def get_payment_status(self, obj):
-        """Get the latest payment status from payment transactions"""
+        """Get the payment status from payment transactions, prioritizing refunded status"""
         from payments.models import PaymentTransaction
+        
+        # Check for refunded payments first (highest priority)
+        refunded_transaction = PaymentTransaction.objects.filter(order=obj, status='refunded').first()
+        if refunded_transaction:
+            return 'refunded'
+        
+        # Then check for other statuses
         latest_transaction = PaymentTransaction.objects.filter(order=obj).order_by('-created_at').first()
         if latest_transaction:
             return latest_transaction.status
@@ -77,8 +84,15 @@ class AdminOrderSerializer(serializers.ModelSerializer):
         }
     
     def get_payment_status(self, obj):
-        """Get the latest payment status from payment transactions"""
+        """Get the payment status from payment transactions, prioritizing refunded status"""
         from payments.models import PaymentTransaction
+        
+        # Check for refunded payments first (highest priority)
+        refunded_transaction = PaymentTransaction.objects.filter(order=obj, status='refunded').first()
+        if refunded_transaction:
+            return 'refunded'
+        
+        # Then check for other statuses
         latest_transaction = PaymentTransaction.objects.filter(order=obj).order_by('-created_at').first()
         if latest_transaction:
             return latest_transaction.status

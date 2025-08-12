@@ -163,7 +163,7 @@ class OrderManager:
     def cancel_order(order):
         """
         Cancel an order and restore stock for all items.
-        Also cancels associated payments if they are pending.
+        Also cancels associated payments if they are pending or processes actual refunds if they were successful.
         
         Args:
             order: Order instance
@@ -188,8 +188,10 @@ class OrderManager:
             order.status = 'cancelled'
             order.save(update_fields=['status'])
             
-            # Cancel associated payments that are pending
+            # Handle associated payments based on their current status
             from payments.models import PaymentTransaction
+            
+            # Cancel pending payments
             pending_payments = PaymentTransaction.objects.filter(
                 order=order, 
                 status='pending'
@@ -200,8 +202,38 @@ class OrderManager:
                 payment.save(update_fields=['status'])
                 print(f"DEBUG: Payment {payment.id} status changed to canceled for order {order.id}")
             
+            # Process actual refunds for successful payments (for processing orders that are being cancelled)
+            successful_payments = PaymentTransaction.objects.filter(
+                order=order, 
+                status='success'
+            )
+            
+            refund_results = []
+            for payment in successful_payments:
+                # Import the refund function from payments.views
+                from payments.views import process_refund_for_cancelled_order
+                
+                # Process actual refund through Stripe
+                refund_result = process_refund_for_cancelled_order(
+                    order, 
+                    refund_reason=f"Order {order.id} cancelled by customer"
+                )
+                refund_results.append(refund_result)
+                
+                if refund_result['success'] and refund_result.get('refund_processed'):
+                    print(f"DEBUG: Payment {payment.id} successfully refunded through Stripe for order {order.id}")
+                elif refund_result['success'] and refund_result.get('marked_as_refunded'):
+                    print(f"DEBUG: Payment {payment.id} marked as refunded (no Stripe processing) for order {order.id}")
+                else:
+                    print(f"DEBUG: Payment {payment.id} refund failed for order {order.id}: {refund_result.get('error', 'Unknown error')}")
+            
+            successful_refunds = sum(1 for result in refund_results if result['success'] and result.get('refund_processed'))
+            marked_refunds = sum(1 for result in refund_results if result['success'] and result.get('marked_as_refunded'))
+            failed_refunds = sum(1 for result in refund_results if not result['success'])
+            
             print(f"DEBUG: Order {order.id} status changed from {original_status} to {order.status}")
             print(f"DEBUG: Cancelled {pending_payments.count()} pending payments for order {order.id}")
+            print(f"DEBUG: Processed {successful_refunds} successful refunds, {marked_refunds} marked refunds, {failed_refunds} failed refunds for order {order.id}")
         
         return True
     
