@@ -30,22 +30,43 @@ interface Category {
   parent_id?: number | null
 }
 
-// Define the Product interface
+// Define ProductColor interface
+interface ProductColor {
+  id: number
+  name: string
+  hex_code: string
+}
+
+// Define ProductVariant interface
+interface ProductVariant {
+  id: number
+  color: ProductColor
+  storage: string
+  price: string
+  stock: number
+  sold: number
+  is_in_stock: boolean
+  total_stock: number
+}
+
+// Define the Product interface to match backend structure
 interface Product {
   id: string | number
   name: string
   description: string
-  price: number
-  originalPrice?: number
+  min_price: number
+  max_price: number
   image?: string
-  category: string | Category
+  category: Category
   rating: number
   reviews: number
   badge?: string
-  colors?: string[]
-  storage?: string[]
+  variants: ProductVariant[]
+  available_colors: ProductColor[]
+  available_storages: string[]
+  total_stock: number
   features?: string[]
-  specs?: Record<string, string>
+  full_description?: string
 }
 
 export default function ProductPage() {
@@ -60,6 +81,7 @@ export default function ProductPage() {
   const [quantity, setQuantity] = useState(1)
   const [addingToCart, setAddingToCart] = useState(false)
   const [reviewRefreshTrigger, setReviewRefreshTrigger] = useState(0)
+  const [currentPrice, setCurrentPrice] = useState<number>(0)
 
   const refreshProductData = async () => {
     try {
@@ -81,6 +103,54 @@ export default function ProductPage() {
     } catch (err) {
       console.error("Error refreshing product data:", err)
     }
+  }
+
+  const updatePrice = (color: string, storage: string, product: Product) => {
+    // Find the exact variant based on color and storage
+    let selectedVariant = product.variants.find(variant => 
+      variant.color.name === color && variant.storage === storage
+    );
+    
+    // If no exact match, find variant with selected color
+    if (!selectedVariant && color) {
+      selectedVariant = product.variants.find(variant => 
+        variant.color.name === color
+      );
+    }
+    
+    // If still no match, use the first available variant
+    if (!selectedVariant && product.variants.length > 0) {
+      selectedVariant = product.variants[0];
+    }
+    
+    const price = selectedVariant ? parseFloat(selectedVariant.price) : product.min_price;
+    setCurrentPrice(price);
+  }
+
+  // Get available storage options for the selected color
+  const getAvailableStoragesForColor = (color: string, product: Product) => {
+    if (!color || !product.variants) return product.available_storages || [];
+    
+    const availableStorages = product.variants
+      .filter(variant => variant.color.name === color && variant.is_in_stock)
+      .map(variant => variant.storage)
+      .filter((storage, index, array) => array.indexOf(storage) === index); // Remove duplicates
+    
+    // Sort storage options in logical order
+    return availableStorages.sort((a, b) => {
+      const storageOrder = {
+        '128GB': 1,
+        '256GB': 2,
+        '512GB': 3,
+        '1TB': 4,
+        '2TB': 5
+      };
+      
+      const aOrder = storageOrder[a as keyof typeof storageOrder] || 999;
+      const bOrder = storageOrder[b as keyof typeof storageOrder] || 999;
+      
+      return aOrder - bOrder;
+    });
   }
 
   const handleReviewChange = () => {
@@ -116,12 +186,21 @@ export default function ProductPage() {
         if (foundProduct) {
           setProduct(foundProduct)
           // Set default selections
-          if (foundProduct.colors && foundProduct.colors.length > 0) {
-            setSelectedColor(foundProduct.colors[0])
-          }
-          if (foundProduct.storage && foundProduct.storage.length > 0) {
-            setSelectedStorage(foundProduct.storage[0])
-          }
+          const defaultColor = foundProduct.available_colors && foundProduct.available_colors.length > 0 
+            ? foundProduct.available_colors[0].name 
+            : "";
+          
+          // Get available storages for the default color
+          const availableStoragesForColor = getAvailableStoragesForColor(defaultColor, foundProduct);
+          const defaultStorage = availableStoragesForColor.length > 0 
+            ? availableStoragesForColor[0] 
+            : "";
+          
+          setSelectedColor(defaultColor)
+          setSelectedStorage(defaultStorage)
+          
+          // Set initial price
+          updatePrice(defaultColor, defaultStorage, foundProduct)
           setLoading(false)
         } else {
           setError("Product not found")
@@ -142,11 +221,31 @@ export default function ProductPage() {
 
     try {
       setAddingToCart(true)
+      
+      // Find the selected variant or use the first available variant
+      let selectedVariant = product.variants.find(variant => 
+        variant.color.name === selectedColor && variant.storage === selectedStorage
+      );
+      
+      // If no exact match, find by color only
+      if (!selectedVariant) {
+        selectedVariant = product.variants.find(variant => 
+          variant.color.name === selectedColor
+        );
+      }
+      
+      // If still no match, use the first variant
+      if (!selectedVariant && product.variants.length > 0) {
+        selectedVariant = product.variants[0];
+      }
+      
+      const variantPrice = currentPrice || (selectedVariant ? parseFloat(selectedVariant.price) : product.min_price);
+      
       await addItem({
         id: Number(product.id),
         productId: Number(product.id),
         name: product.name,
-        price: product.price,
+        price: variantPrice,
         image: product.image || '',
         color: selectedColor,
         storage: selectedStorage,
@@ -217,13 +316,13 @@ export default function ProductPage() {
           Products
         </Link>
         <span className="mx-2">/</span>
-        {product.category && (
+                {product.category && (
           <>
             <Link 
-              href={`/products?category=${typeof product.category === 'object' ? product.category.slug : product.category}`} 
+              href={`/products?category=${product.category.slug}`} 
               className="hover:text-blue-600 capitalize"
             >
-              {typeof product.category === 'object' ? product.category.name : product.category}
+              {product.category.name}
             </Link>
             <span className="mx-2">/</span>
           </>
@@ -258,14 +357,11 @@ export default function ProductPage() {
 
           {/* Price */}
           <div className="flex items-center gap-3">
-            <span className="text-3xl font-bold">${product.price}</span>
-            {product.originalPrice && (
-              <span className="text-xl text-slate-500 line-through">${product.originalPrice}</span>
-            )}
-            {product.originalPrice && (
-              <Badge variant="outline" className="text-green-600 border-green-600">
-                Save ${product.originalPrice - product.price}
-              </Badge>
+            <span className="text-3xl font-bold">${currentPrice || product.min_price}</span>
+            {product.min_price !== product.max_price && (
+              <span className="text-sm text-slate-500">
+                (${product.min_price} - ${product.max_price})
+              </span>
             )}
           </div>
 
@@ -275,21 +371,35 @@ export default function ProductPage() {
           <Separator />
 
           {/* Color Options */}
-          {product.colors && product.colors.length > 0 && (
+          {product.available_colors && product.available_colors.length > 0 && (
             <div className="space-y-3">
               <h3 className="font-medium">Color</h3>
               <div className="flex flex-wrap gap-3">
-                {product.colors.map((color: string) => (
+                {Array.from(new Map(product.available_colors.map(color => [color.id, color])).values()).map((color: ProductColor) => (
                   <Button
-                    key={color}
+                    key={color.id}
                     variant="outline"
                     className={`rounded-full w-12 h-12 p-0 border-2 ${
-                      selectedColor === color ? "border-blue-600" : "border-slate-200"
+                      selectedColor === color.name ? "border-blue-600" : "border-slate-200"
                     }`}
-                    style={{ backgroundColor: color.toLowerCase() }}
-                    onClick={() => setSelectedColor(color)}
+                    style={{ backgroundColor: color.hex_code }}
+                    onClick={() => {
+                      const newColor = color.name;
+                      const availableStoragesForNewColor = getAvailableStoragesForColor(newColor, product);
+                      
+                      // Try to keep the current storage if it's available for the new color
+                      let newStorage = selectedStorage;
+                      if (!availableStoragesForNewColor.includes(selectedStorage)) {
+                        // If current storage is not available for new color, select the first available one
+                        newStorage = availableStoragesForNewColor.length > 0 ? availableStoragesForNewColor[0] : "";
+                      }
+                      
+                      setSelectedColor(newColor)
+                      setSelectedStorage(newStorage)
+                      updatePrice(newColor, newStorage, product)
+                    }}
                   >
-                    {selectedColor === color && <Check className="h-4 w-4 text-white" />}
+                    {selectedColor === color.name && <Check className="h-4 w-4 text-white" />}
                   </Button>
                 ))}
               </div>
@@ -297,23 +407,29 @@ export default function ProductPage() {
           )}
 
           {/* Storage Options */}
-          {product.storage && product.storage.length > 0 && (
-            <div className="space-y-3">
-              <h3 className="font-medium">Storage</h3>
-              <div className="flex flex-wrap gap-3">
-                {product.storage.map((size: string) => (
-                  <Button
-                    key={size}
-                    variant={selectedStorage === size ? "default" : "outline"}
-                    className={selectedStorage === size ? "bg-blue-600 hover:bg-blue-700" : ""}
-                    onClick={() => setSelectedStorage(size)}
-                  >
-                    {size}
-                  </Button>
-                ))}
+          {(() => {
+            const availableStoragesForSelectedColor = getAvailableStoragesForColor(selectedColor, product);
+            return availableStoragesForSelectedColor.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="font-medium">Storage</h3>
+                <div className="flex flex-wrap gap-3">
+                  {availableStoragesForSelectedColor.map((size: string) => (
+                    <Button
+                      key={size}
+                      variant={selectedStorage === size ? "default" : "outline"}
+                      className={selectedStorage === size ? "bg-blue-600 hover:bg-blue-700" : ""}
+                      onClick={() => {
+                        setSelectedStorage(size)
+                        updatePrice(selectedColor, size, product)
+                      }}
+                    >
+                      {size}
+                    </Button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Quantity */}
           <div className="space-y-3">
@@ -386,9 +502,9 @@ export default function ProductPage() {
           <TabsContent value="description" className="p-6 border rounded-b-lg mt-2">
             <div className="prose max-w-none">
               <h3>About {product.name}</h3>
-              <p>{product.description}</p>
+              <p>{product.full_description || product.description}</p>
 
-              {product.features && (
+              {product.features && product.features.length > 0 && (
                 <>
                   <h4>Key Features</h4>
                   <ul>

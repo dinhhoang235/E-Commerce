@@ -3,44 +3,111 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Search, Edit, Trash2, Eye, Star, RefreshCw } from "lucide-react"
-import { ImageUpload } from "@/components/image-upload"
-import { SafeImage } from "@/components/safe-image"
-import { getAllProducts, createProduct, updateProduct, deleteProduct } from "@/lib/services/products"
-import { getAllCategories } from "@/lib/services/categories"
-import { formatImageUrl, isExternalImage } from "@/lib/utils/image"
-import { useImageCache } from "@/hooks/use-image-cache"
+import { Badge } from "@/components/ui/badge"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { analyticsService, type ProductStats } from "@/lib/services/analytics"
+import { Plus, Search, Edit, Trash2, Eye, RefreshCw, Star, Package, Palette, Settings } from "lucide-react"
+import { 
+  getAllProducts, 
+  createProduct, 
+  updateProduct, 
+  deleteProduct,
+  getAllColors,
+  createColor,
+  getAllVariants,
+  createVariant,
+  getProductVariants,
+  updateVariant,
+  deleteVariant
+} from "@/lib/services/products"
+import { getAllCategories } from "@/lib/services/categories"
+import { analyticsService } from "@/lib/services/analytics"
+import { SafeImage } from "@/components/safe-image"
+import { ImageUpload } from "@/components/image-upload"
+import { useImageCache } from "@/hooks/use-image-cache"
+
+// Types
+interface ProductStats {
+  totalSales: number
+  revenue: number
+  pageViews: number
+  conversionRate: string
+}
+
+interface Color {
+  id: number
+  name: string
+  hex_code: string
+}
+
+interface Variant {
+  id?: number
+  product?: number
+  color: any
+  storage: string
+  price: number
+  stock: number
+  is_in_stock: boolean
+}
+
+interface Product {
+  id: number
+  name: string
+  category: any
+  image: string
+  description: string
+  full_description: string
+  features: string[]
+  badge: string
+  rating: number
+  reviews: number
+  variants: Variant[]
+  min_price: number
+  max_price: number
+  total_stock: number
+  available_colors: Color[]
+  available_storages: string[]
+  created_at: string
+}
+
+// Helper functions
+const formatImageUrl = (url: string | null | undefined): string => {
+  if (!url) return "/placeholder.jpg"
+  if (url.startsWith("http")) return url
+  return `http://localhost:8000${url}`
+}
+
+const isExternalImage = (url: string | null | undefined): boolean => {
+  if (!url) return false
+  return url.startsWith("http")
+}
 
 export default function AdminProductsPage() {
-  const [products, setProducts] = useState<any[]>([])
+  const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<any[]>([])
+  const [colors, setColors] = useState<Color[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("all")
+  
+  // Dialog states
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
-  const [editingProduct, setEditingProduct] = useState<any>(null)
-  const [viewingProduct, setViewingProduct] = useState<any>(null)
-  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [imageUpdateTrigger, setImageUpdateTrigger] = useState(0) // Force image refresh
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
+  const [isVariantDialogOpen, setIsVariantDialogOpen] = useState(false)
+  const [isColorDialogOpen, setIsColorDialogOpen] = useState(false)
+  
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [viewingProduct, setViewingProduct] = useState<Product | null>(null)
+  const [selectedProductForVariants, setSelectedProductForVariants] = useState<Product | null>(null)
+  const [productVariants, setProductVariants] = useState<Variant[]>([])
+  
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [productStats, setProductStats] = useState<ProductStats | null>(null)
   const [loadingStats, setLoadingStats] = useState(false)
@@ -48,97 +115,83 @@ export default function AdminProductsPage() {
   const { getCachedImageUrl, invalidateCache, refreshAllImages, updateTrigger } = useImageCache()
   const { toast } = useToast()
 
+  // Form states
   const [newProduct, setNewProduct] = useState({
     name: "",
     category: "",
-    price: "",
-    originalPrice: "",
     description: "",
-    fullDescription: "",
+    full_description: "",
     badge: "",
     image: "" as string | File | null,
     features: [] as string[],
-    colors: [] as string[],
-    storage: [] as string[],
-    stock: "",
-    sold: "",
-    is_in_stock: true,
   })
 
-  // Load products and categories on component mount
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true)
-        setError(null)
-        
-        // Load products and categories in parallel
-        const [productsData, categoriesData] = await Promise.all([
-          getAllProducts(),
-          getAllCategories()
-        ])
-        
-        console.log("Products API Response:", productsData) // Debug log
-        console.log("Categories API Response:", categoriesData) // Debug log
-        console.log("Categories array length:", categoriesData?.length || 0) // Debug log
-        
-        // Handle products data
-        if (Array.isArray(productsData)) {
-          setProducts(productsData)
-        } else if (productsData && Array.isArray(productsData.results)) {
-          // Handle paginated response
-          setProducts(productsData.results)
-        } else if (productsData && typeof productsData === 'object') {
-          // Handle object response - convert to array
-          setProducts([productsData])
-        } else {
-          console.warn("Unexpected products API response format:", productsData)
-          setProducts([])
-        }
-        
-        // Handle categories data
-        if (Array.isArray(categoriesData)) {
-          setCategories(categoriesData)
-        } else if (categoriesData && Array.isArray(categoriesData.results)) {
-          // Handle paginated response
-          setCategories(categoriesData.results)
-        } else if (categoriesData && typeof categoriesData === 'object') {
-          // Handle object response - convert to array
-          setCategories([categoriesData])
-        } else {
-          console.warn("Unexpected categories API response format:", categoriesData)
-          setCategories([])
-        }
-      } catch (err) {
-        setError("Failed to load data")
-        console.error("Error loading data:", err)
-        setProducts([]) // Ensure products is always an array
-        setCategories([]) // Ensure categories is always an array
-      } finally {
-        setLoading(false)
-      }
-    }
+  const [newVariant, setNewVariant] = useState({
+    color: "",
+    storage: "",
+    price: "",
+    stock: "",
+  })
 
-    loadData()
+  const [newColor, setNewColor] = useState({
+    name: "",
+    hex_code: "#000000",
+  })
+
+  // Load initial data
+  useEffect(() => {
+    loadInitialData()
   }, [])
 
-  // Load product statistics for viewing product
-  const loadProductStats = async (productId: number) => {
+  const loadInitialData = async () => {
     try {
-      setLoadingStats(true)
-      const stats = await analyticsService.getProductStats(productId)
-      setProductStats(stats)
-    } catch (error) {
-      console.error("Error loading product stats:", error)
-      // Use fallback stats if API fails
-      setProductStats({
-        totalSales: 156,
-        revenue: 155844,
-        pageViews: 2340,
-        conversionRate: "6.7%"
-      })
+      setLoading(true)
+      setError(null)
+      
+      const [productsData, categoriesData, colorsData] = await Promise.all([
+        getAllProducts(),
+        getAllCategories(),
+        getAllColors()
+      ])
+      
+      console.log("Products API Response:", productsData)
+      console.log("Categories API Response:", categoriesData)
+      console.log("Colors API Response:", colorsData)
+      
+      // Handle products data
+      if (Array.isArray(productsData)) {
+        setProducts(productsData)
+      } else if (productsData && Array.isArray(productsData.results)) {
+        setProducts(productsData.results)
+      } else {
+        setProducts([])
+      }
+      
+      // Handle categories data
+      if (Array.isArray(categoriesData)) {
+        setCategories(categoriesData)
+      } else if (categoriesData && Array.isArray(categoriesData.results)) {
+        setCategories(categoriesData.results)
+      } else {
+        setCategories([])
+      }
+
+      // Handle colors data
+      if (Array.isArray(colorsData)) {
+        setColors(colorsData)
+      } else if (colorsData && Array.isArray(colorsData.results)) {
+        setColors(colorsData.results)
+      } else {
+        setColors([])
+      }
+    } catch (err) {
+      setError("Failed to load data")
+      console.error("Error loading data:", err)
+      setProducts([])
+      setCategories([])
+      setColors([])
     } finally {
-      setLoadingStats(false)
+      setLoading(false)
     }
   }
 
@@ -152,19 +205,15 @@ export default function AdminProductsPage() {
         setProducts(productsData)
       } else if (productsData && Array.isArray(productsData.results)) {
         setProducts(productsData.results)
-      } else if (productsData && typeof productsData === 'object') {
-        setProducts([productsData])
       } else {
         setProducts([])
       }
       
-      // Force image refresh
-      setImageUpdateTrigger(prev => prev + 1)
       refreshAllImages()
       
       toast({
         title: "Products refreshed",
-        description: "Product list and images have been refreshed.",
+        description: "Product list has been refreshed.",
       })
     } catch (err) {
       console.error("Error reloading products:", err)
@@ -178,178 +227,268 @@ export default function AdminProductsPage() {
     }
   }
 
-  const filteredProducts = Array.isArray(products) ? products.filter((product) => {
+  // Load product statistics
+  const loadProductStats = async (productId: number) => {
+    try {
+      setLoadingStats(true)
+      const stats = await analyticsService.getProductStats(productId)
+      setProductStats(stats)
+    } catch (error) {
+      console.error("Error loading product stats:", error)
+      setProductStats({
+        totalSales: 156,
+        revenue: 155844,
+        pageViews: 2340,
+        conversionRate: "6.7%"
+      })
+    } finally {
+      setLoadingStats(false)
+    }
+  }
+
+  // Filter products
+  const filteredProducts = products.filter((product) => {
     if (!product || !product.name) return false
     
-    // Handle both camelCase and snake_case for category
-    const categoryName = product.category?.name || product.category || ""
-    if (!categoryName) return false
-    
+    const categoryName = product.category?.name || ""
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategory = selectedCategory === "all" || categoryName === selectedCategory
     return matchesSearch && matchesCategory
-  }) : []
+  })
 
+  // Handle add product (create product first, then variants)
   const handleAddProduct = async () => {
     try {
+      // First create the product
       const productData: any = {
         name: newProduct.name,
-        category_id: newProduct.category, // Use category_id for backend
-        price: Number.parseFloat(newProduct.price),
-        original_price: newProduct.originalPrice ? Number.parseFloat(newProduct.originalPrice) : null,
+        category_id: newProduct.category,
         description: newProduct.description,
-        full_description: newProduct.fullDescription,
+        full_description: newProduct.full_description,
         badge: newProduct.badge || null,
         features: newProduct.features,
-        colors: newProduct.colors,
-        storage: newProduct.storage,
-        stock: newProduct.stock ? Number.parseInt(newProduct.stock) : 0,
-        sold: newProduct.sold ? Number.parseInt(newProduct.sold) : 0,
-        is_in_stock: newProduct.is_in_stock,
       }
 
-      // Handle image field properly
+      // Handle image
       if (newProduct.image instanceof File) {
-        // New file selected
         productData.imageFile = newProduct.image
-      } else if (newProduct.image === null) {
-        // Image marked for deletion
-        productData.imageFile = null
       }
-      // Don't set anything for existing string URLs to keep existing image
 
-      console.log("Sending product data:", productData) // Debug log
-
+      console.log("Creating product:", productData)
       const createdProduct = await createProduct(productData)
-      console.log("Created product:", createdProduct) // Debug log
+      console.log("Created product:", createdProduct)
       
-      // Force image refresh by updating the trigger
-      setImageUpdateTrigger(prev => prev + 1)
-      
-      // Ensure products is an array before spreading
-      const currentProducts = Array.isArray(products) ? products : []
-      setProducts([...currentProducts, createdProduct])
+      // Update products list
+      setProducts(prev => [...prev, createdProduct])
       
       // Reset form
       setNewProduct({
         name: "",
         category: "",
-        price: "",
-        originalPrice: "",
         description: "",
-        fullDescription: "",
+        full_description: "",
         badge: "",
-        image: "" as string | File | null,
+        image: "",
         features: [],
-        colors: [],
-        storage: [],
-        stock: "",
-        sold: "",
-        is_in_stock: true,
       })
+      
       setIsAddDialogOpen(false)
+      
+      toast({
+        title: "Product created",
+        description: "Product has been created successfully. You can now add variants.",
+      })
+      
+      // Optionally open variant dialog for the new product
+      setSelectedProductForVariants(createdProduct)
+      setIsVariantDialogOpen(true)
+      
     } catch (error) {
       console.error("Error adding product:", error)
-      setError("Failed to add product")
+      toast({
+        title: "Error",
+        description: "Failed to create product. Please try again.",
+        variant: "destructive",
+      })
     }
   }
 
+  // Handle edit product
   const handleEditProduct = async () => {
     if (!editingProduct) return
 
     try {
       const productData: any = {
         name: newProduct.name,
-        category_id: newProduct.category, // Use category_id for backend
-        price: Number.parseFloat(newProduct.price),
-        original_price: newProduct.originalPrice ? Number.parseFloat(newProduct.originalPrice) : null,
+        category_id: newProduct.category,
         description: newProduct.description,
-        full_description: newProduct.fullDescription,
+        full_description: newProduct.full_description,
         badge: newProduct.badge || null,
         features: newProduct.features,
-        colors: newProduct.colors,
-        storage: newProduct.storage,
-        stock: newProduct.stock ? Number.parseInt(newProduct.stock) : 0,
-        sold: newProduct.sold ? Number.parseInt(newProduct.sold) : 0,
-        is_in_stock: newProduct.is_in_stock,
       }
 
-      // Handle image field properly
+      // Handle image
       if (newProduct.image instanceof File) {
-        // New file selected
         productData.imageFile = newProduct.image
       } else if (newProduct.image === null) {
-        // Image marked for deletion
         productData.imageFile = null
       }
-      // Don't set anything for existing string URLs to keep existing image
 
-      console.log("Updating product data:", productData) // Debug log
-
-      const updatedProduct = await updateProduct(editingProduct.id, productData)
-      console.log("Updated product:", updatedProduct) // Debug log
+      console.log("Updating product:", productData)
+      const updatedProduct = await updateProduct(editingProduct.id.toString(), productData)
+      console.log("Updated product:", updatedProduct)
       
-      // Invalidate cache for the updated product's image
+      // Update products list
+      setProducts(prev => prev.map(p => p.id === editingProduct.id ? updatedProduct : p))
+      
       if (updatedProduct.image) {
         invalidateCache(formatImageUrl(updatedProduct.image))
       }
       
-      // Force image refresh by updating the trigger
-      setImageUpdateTrigger(prev => prev + 1)
-      
-      // Reload products to ensure we have the latest data
-      await reloadProducts()
-      
-      // Update viewing product if it's the same one being edited
-      if (viewingProduct && viewingProduct.id === editingProduct.id) {
-        setViewingProduct(updatedProduct)
-      }
+      setEditingProduct(null)
+      setIsEditDialogOpen(false)
       
       // Reset form
-      setEditingProduct(null)
       setNewProduct({
         name: "",
         category: "",
-        price: "",
-        originalPrice: "",
         description: "",
-        fullDescription: "",
+        full_description: "",
         badge: "",
-        image: "" as string | File | null,
+        image: "",
         features: [],
-        colors: [],
-        storage: [],
-        stock: "",
-        sold: "",
-        is_in_stock: true,
       })
-      setIsEditDialogOpen(false)
       
-      // Show success toast
       toast({
-        title: "Product updated successfully",
-        description: "The product has been updated and images refreshed.",
+        title: "Product updated",
+        description: "Product has been updated successfully.",
       })
     } catch (error) {
       console.error("Error updating product:", error)
-      setError("Failed to update product")
       toast({
-        title: "Update failed",
-        description: "Failed to update the product. Please try again.",
+        title: "Error",
+        description: "Failed to update product. Please try again.",
         variant: "destructive",
       })
     }
   }
 
+  // Handle delete product
   const handleDeleteProduct = async (id: number) => {
     try {
       await deleteProduct(id.toString())
-      // Ensure products is an array before filtering
-      const currentProducts = Array.isArray(products) ? products : []
-      setProducts(currentProducts.filter((p) => p.id !== id))
+      setProducts(prev => prev.filter(p => p.id !== id))
+      
+      toast({
+        title: "Product deleted",
+        description: "Product has been deleted successfully.",
+      })
     } catch (error) {
       console.error("Error deleting product:", error)
-      setError("Failed to delete product")
+      toast({
+        title: "Error",
+        description: "Failed to delete product. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Handle load product variants
+  const handleLoadProductVariants = async (product: Product) => {
+    try {
+      setSelectedProductForVariants(product)
+      const variants = await getProductVariants(product.id.toString())
+      setProductVariants(Array.isArray(variants) ? variants : [])
+      setIsVariantDialogOpen(true)
+    } catch (error) {
+      console.error("Error loading variants:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load product variants.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Handle add variant
+  const handleAddVariant = async () => {
+    if (!selectedProductForVariants) return
+
+    try {
+      const variantData = {
+        product: selectedProductForVariants.id,
+        color_id: newVariant.color,
+        storage: newVariant.storage,
+        price: parseFloat(newVariant.price),
+        stock: parseInt(newVariant.stock),
+      }
+
+      console.log("Creating variant:", variantData)
+      const createdVariant = await createVariant(variantData)
+      console.log("Created variant:", createdVariant)
+      
+      // Update variants list
+      setProductVariants(prev => [...prev, createdVariant])
+      
+      // Reset variant form
+      setNewVariant({
+        color: "",
+        storage: "",
+        price: "",
+        stock: "",
+      })
+      
+      // Reload products to get updated variant info
+      reloadProducts()
+      
+      toast({
+        title: "Variant added",
+        description: "Product variant has been added successfully.",
+      })
+    } catch (error) {
+      console.error("Error adding variant:", error)
+      toast({
+        title: "Error",
+        description: "Failed to add variant. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Handle add color
+  const handleAddColor = async () => {
+    try {
+      const colorData = {
+        name: newColor.name,
+        hex_code: newColor.hex_code,
+      }
+
+      console.log("Creating color:", colorData)
+      const createdColor = await createColor(colorData)
+      console.log("Created color:", createdColor)
+      
+      // Update colors list
+      setColors(prev => [...prev, createdColor])
+      
+      // Reset color form
+      setNewColor({
+        name: "",
+        hex_code: "#000000",
+      })
+      
+      setIsColorDialogOpen(false)
+      
+      toast({
+        title: "Color added",
+        description: "New color has been added successfully.",
+      })
+    } catch (error) {
+      console.error("Error adding color:", error)
+      toast({
+        title: "Error",
+        description: "Failed to add color. Please try again.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -393,1057 +532,958 @@ export default function AdminProductsPage() {
         <>
           {/* Header */}
           <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Products</h1>
-          <p className="text-slate-600">Manage your product catalog</p>
-        </div>
-        <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            onClick={reloadProducts}
-            disabled={isRefreshing}
-            className="flex items-center gap-2"
-          >
-            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            {isRefreshing ? 'Refreshing...' : 'Refresh'}
-          </Button>
-          <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
-            setIsAddDialogOpen(open)
-            if (open) {
-              // Reset form when opening add dialog
-              setNewProduct({
-                name: "",
-                category: "",
-                price: "",
-                originalPrice: "",
-                description: "",
-                fullDescription: "",
-                badge: "",
-                image: "" as string | File | null,
-                features: [],
-                colors: [],
-                storage: [],
-                stock: "",
-                sold: "",
-                is_in_stock: true,
-              })
-            }
-          }}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Product
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Products</h1>
+              <p className="text-slate-600">Manage your product catalog and variants</p>
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={reloadProducts}
+                disabled={isRefreshing}
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                {isRefreshing ? 'Refreshing...' : 'Refresh'}
               </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Add New Product</DialogTitle>
-              <DialogDescription>Create a new product for your store</DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Product Name</Label>
-                  <Input
-                    id="name"
-                    value={newProduct.name}
-                    onChange={(e) => setNewProduct((prev) => ({ ...prev, name: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="category">Category</Label>
-                  <Select
-                    value={newProduct.category}
-                    onValueChange={(value) => setNewProduct((prev) => ({ ...prev, category: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((category) => (
-                        <SelectItem key={category.id} value={category.id.toString()}>
-                          {category.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="price">Price</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    value={newProduct.price}
-                    onChange={(e) => setNewProduct((prev) => ({ ...prev, price: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="originalPrice">Original Price (Optional)</Label>
-                  <Input
-                    id="originalPrice"
-                    type="number"
-                    value={newProduct.originalPrice}
-                    onChange={(e) => setNewProduct((prev) => ({ ...prev, originalPrice: e.target.value }))}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="stock">Stock Quantity</Label>
-                  <Input
-                    id="stock"
-                    type="number"
-                    min="0"
-                    value={newProduct.stock}
-                    onChange={(e) => setNewProduct((prev) => ({ ...prev, stock: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="sold">Sold Quantity</Label>
-                  <Input
-                    id="sold"
-                    type="number"
-                    min="0"
-                    value={newProduct.sold}
-                    onChange={(e) => setNewProduct((prev) => ({ ...prev, sold: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="is_in_stock">In Stock Status</Label>
-                  <div className="flex items-center space-x-2 mt-2">
-                    <input
-                      id="is_in_stock"
-                      type="checkbox"
-                      checked={newProduct.is_in_stock}
-                      onChange={(e) => setNewProduct((prev) => ({ ...prev, is_in_stock: e.target.checked }))}
-                      className="w-4 h-4"
-                    />
-                    <Label htmlFor="is_in_stock" className="text-sm">Product is in stock</Label>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="description">Short Description</Label>
-                <Textarea
-                  id="description"
-                  value={newProduct.description}
-                  onChange={(e) => setNewProduct((prev) => ({ ...prev, description: e.target.value }))}
-                  rows={2}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="fullDescription">Full Description</Label>
-                <Textarea
-                  id="fullDescription"
-                  value={newProduct.fullDescription}
-                  onChange={(e) => setNewProduct((prev) => ({ ...prev, fullDescription: e.target.value }))}
-                  rows={3}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="badge">Badge (Optional)</Label>
-                <Input
-                  id="badge"
-                  value={newProduct.badge}
-                  onChange={(e) => setNewProduct((prev) => ({ ...prev, badge: e.target.value }))}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <ImageUpload
-                  value={newProduct.image || undefined}
-                  onChange={(value) => setNewProduct((prev) => ({ ...prev, image: value }))}
-                  label="Product Image"
-                />
-              </div>
-
-              {/* Features Section */}
-              <div className="space-y-2">
-                <Label>Features</Label>
-                <div className="space-y-2">
-                  {newProduct.features.map((feature, index) => (
-                    <div key={index} className="flex gap-2">
-                      <Input
-                        value={feature}
-                        onChange={(e) => {
-                          const newFeatures = [...newProduct.features]
-                          newFeatures[index] = e.target.value
-                          setNewProduct((prev) => ({ ...prev, features: newFeatures }))
-                        }}
-                        placeholder="Enter feature"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={() => {
-                          const newFeatures = newProduct.features.filter((_, i) => i !== index)
-                          setNewProduct((prev) => ({ ...prev, features: newFeatures }))
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setNewProduct((prev) => ({ ...prev, features: [...prev.features, ""] }))
-                    }}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Feature
-                  </Button>
-                </div>
-              </div>
-
-              {/* Colors Section */}
-              <div className="space-y-2">
-                <Label>Colors</Label>
-                <div className="space-y-2">
-                  {newProduct.colors.map((color, index) => (
-                    <div key={index} className="flex gap-2 items-center">
-                      <input
-                        type="color"
-                        value={color}
-                        onChange={(e) => {
-                          const newColors = [...newProduct.colors]
-                          newColors[index] = e.target.value
-                          setNewProduct((prev) => ({ ...prev, colors: newColors }))
-                        }}
-                        className="w-12 h-10 rounded border"
-                      />
-                      <Input
-                        value={color}
-                        onChange={(e) => {
-                          const newColors = [...newProduct.colors]
-                          newColors[index] = e.target.value
-                          setNewProduct((prev) => ({ ...prev, colors: newColors }))
-                        }}
-                        placeholder="#000000"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={() => {
-                          const newColors = newProduct.colors.filter((_, i) => i !== index)
-                          setNewProduct((prev) => ({ ...prev, colors: newColors }))
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setNewProduct((prev) => ({ ...prev, colors: [...prev.colors, "#000000"] }))
-                    }}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
+              
+              {/* Add Color Button */}
+              <Dialog open={isColorDialogOpen} onOpenChange={setIsColorDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline">
+                    <Palette className="mr-2 h-4 w-4" />
                     Add Color
                   </Button>
-                </div>
-              </div>
-
-              {/* Storage Section */}
-              <div className="space-y-2">
-                <Label>Storage Options</Label>
-                <div className="space-y-2">
-                  {newProduct.storage.map((storage, index) => (
-                    <div key={index} className="flex gap-2">
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Add New Color</DialogTitle>
+                    <DialogDescription>Add a new color option for product variants</DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="colorName">Color Name</Label>
                       <Input
-                        value={storage}
-                        onChange={(e) => {
-                          const newStorage = [...newProduct.storage]
-                          newStorage[index] = e.target.value
-                          setNewProduct((prev) => ({ ...prev, storage: newStorage }))
-                        }}
-                        placeholder="e.g., 128GB, 256GB"
+                        id="colorName"
+                        value={newColor.name}
+                        onChange={(e) => setNewColor(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder="e.g., Midnight Black, Ocean Blue"
                       />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={() => {
-                          const newStorage = newProduct.storage.filter((_, i) => i !== index)
-                          setNewProduct((prev) => ({ ...prev, storage: newStorage }))
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="colorHex">Hex Code</Label>
+                      <div className="flex gap-2">
+                        <input
+                          type="color"
+                          value={newColor.hex_code}
+                          onChange={(e) => setNewColor(prev => ({ ...prev, hex_code: e.target.value }))}
+                          className="w-12 h-10 rounded border"
+                        />
+                        <Input
+                          id="colorHex"
+                          value={newColor.hex_code}
+                          onChange={(e) => setNewColor(prev => ({ ...prev, hex_code: e.target.value }))}
+                          placeholder="#000000"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsColorDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleAddColor}>Add Color</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* Add Product Button */}
+              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Product
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Add New Product</DialogTitle>
+                    <DialogDescription>Create a new product. You can add variants after creation.</DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="name">Product Name</Label>
+                        <Input
+                          id="name"
+                          value={newProduct.name}
+                          onChange={(e) => setNewProduct(prev => ({ ...prev, name: e.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="category">Category</Label>
+                        <Select
+                          value={newProduct.category}
+                          onValueChange={(value) => setNewProduct(prev => ({ ...prev, category: value }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories.map((category) => (
+                              <SelectItem key={category.id} value={category.id.toString()}>
+                                {category.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="description">Short Description</Label>
+                      <Textarea
+                        id="description"
+                        value={newProduct.description}
+                        onChange={(e) => setNewProduct(prev => ({ ...prev, description: e.target.value }))}
+                        rows={2}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="fullDescription">Full Description</Label>
+                      <Textarea
+                        id="fullDescription"
+                        value={newProduct.full_description}
+                        onChange={(e) => setNewProduct(prev => ({ ...prev, full_description: e.target.value }))}
+                        rows={3}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="badge">Badge (Optional)</Label>
+                      <Input
+                        id="badge"
+                        value={newProduct.badge}
+                        onChange={(e) => setNewProduct(prev => ({ ...prev, badge: e.target.value }))}
+                        placeholder="e.g., New, Sale, Popular"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <ImageUpload
+                        value={newProduct.image || undefined}
+                        onChange={(value) => setNewProduct(prev => ({ ...prev, image: value }))}
+                        label="Product Image"
+                      />
+                    </div>
+
+                    {/* Features Section */}
+                    <div className="space-y-2">
+                      <Label>Features</Label>
+                      <div className="space-y-2">
+                        {newProduct.features.map((feature, index) => (
+                          <div key={index} className="flex gap-2">
+                            <Input
+                              value={feature}
+                              onChange={(e) => {
+                                const newFeatures = [...newProduct.features]
+                                newFeatures[index] = e.target.value
+                                setNewProduct(prev => ({ ...prev, features: newFeatures }))
+                              }}
+                              placeholder="Enter feature"
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              onClick={() => {
+                                const newFeatures = newProduct.features.filter((_, i) => i !== index)
+                                setNewProduct(prev => ({ ...prev, features: newFeatures }))
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            setNewProduct(prev => ({ ...prev, features: [...prev.features, ""] }))
+                          }}
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          Add Feature
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleAddProduct}>Create Product</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+
+          {/* Filters */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Filters</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                    <Input
+                      placeholder="Search products..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.name}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Products Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Products ({filteredProducts.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Price Range</TableHead>
+                    <TableHead>Stock</TableHead>
+                    <TableHead>Variants</TableHead>
+                    <TableHead>Rating</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredProducts.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8">
+                        <div className="text-slate-500">
+                          No products found
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredProducts.map((product) => (
+                      <TableRow key={product.id}>
+                        <TableCell>
+                          <div className="flex items-center space-x-3">
+                            <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center">
+                              <SafeImage
+                                src={getCachedImageUrl(formatImageUrl(product.image))}
+                                alt={product.name || "Product"}
+                                width={40}
+                                height={40}
+                                className="object-contain"
+                                unoptimized={isExternalImage(product.image)}
+                              />
+                            </div>
+                            <div>
+                              <p className="font-medium">{product.name || "Unnamed Product"}</p>
+                              <p className="text-sm text-slate-600 line-clamp-1">{product.description || "No description"}</p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize">
+                            {product.category?.name || "uncategorized"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            {product.min_price && product.max_price ? (
+                              product.min_price === product.max_price ? (
+                                <p className="font-medium">${product.min_price}</p>
+                              ) : (
+                                <p className="font-medium">${product.min_price} - ${product.max_price}</p>
+                              )
+                            ) : (
+                              <p className="text-slate-500">No variants</p>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-center">
+                            <span className="text-sm font-medium">{product.total_stock || 0}</span>
+                            <span className="text-xs text-slate-500 block">total</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary">
+                              {product.variants?.length || 0} variants
+                            </Badge>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleLoadProductVariants(product)}
+                            >
+                              <Settings className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center">
+                            <span className="text-sm">{product.rating || 0}</span>
+                            <Star className="h-3 w-3 ml-1 fill-yellow-400 text-yellow-400" />
+                            <span className="text-xs text-slate-500 ml-1">({product.reviews || 0})</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setViewingProduct(product)
+                                setIsViewDialogOpen(true)
+                                loadProductStats(product.id)
+                              }}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setEditingProduct(product)
+                                setNewProduct({
+                                  name: product.name || "",
+                                  category: product.category?.id?.toString() || "",
+                                  description: product.description || "",
+                                  full_description: product.full_description || "",
+                                  badge: product.badge || "",
+                                  image: product.image || "",
+                                  features: product.features || [],
+                                })
+                                setIsEditDialogOpen(true)
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteProduct(product.id)}
+                              className="text-red-500 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {/* Product Variants Dialog */}
+          <Dialog open={isVariantDialogOpen} onOpenChange={setIsVariantDialogOpen}>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>
+                  Product Variants - {selectedProductForVariants?.name}
+                </DialogTitle>
+                <DialogDescription>
+                  Manage color and storage variants for this product
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-6">
+                {/* Add New Variant Form */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Add New Variant</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-4 gap-4">
+                      <div className="space-y-2">
+                        <Label>Color</Label>
+                        <Select
+                          value={newVariant.color}
+                          onValueChange={(value) => setNewVariant(prev => ({ ...prev, color: value }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select color" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {colors.map((color) => (
+                              <SelectItem key={color.id} value={color.id.toString()}>
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className="w-4 h-4 rounded border"
+                                    style={{ backgroundColor: color.hex_code }}
+                                  />
+                                  {color.name}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Storage</Label>
+                        <Select
+                          value={newVariant.storage}
+                          onValueChange={(value) => setNewVariant(prev => ({ ...prev, storage: value }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select storage" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="128GB">128 GB</SelectItem>
+                            <SelectItem value="256GB">256 GB</SelectItem>
+                            <SelectItem value="512GB">512 GB</SelectItem>
+                            <SelectItem value="1TB">1 TB</SelectItem>
+                            <SelectItem value="2TB">2 TB</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Price</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={newVariant.price}
+                          onChange={(e) => setNewVariant(prev => ({ ...prev, price: e.target.value }))}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Stock</Label>
+                        <Input
+                          type="number"
+                          value={newVariant.stock}
+                          onChange={(e) => setNewVariant(prev => ({ ...prev, stock: e.target.value }))}
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-4">
+                      <Button onClick={handleAddVariant}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Variant
                       </Button>
                     </div>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setNewProduct((prev) => ({ ...prev, storage: [...prev.storage, ""] }))
-                    }}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Storage Option
-                  </Button>
-                </div>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleAddProduct}>Add Product</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-        </div>
-      </div>
+                  </CardContent>
+                </Card>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
-                <Input
-                  placeholder="Search products..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {categories.map((category) => (
-                  <SelectItem key={category.id} value={category.name}>
-                    {category.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Products Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Products ({filteredProducts.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Product</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Price</TableHead>
-                <TableHead>Stock</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Rating</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredProducts.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
-                    <div className="text-slate-500">
-                      {loading ? "Loading products..." : "No products found"}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredProducts.map((product) => (
-                  <TableRow key={product.id}>
-                    <TableCell>
-                      <div className="flex items-center space-x-3">
-                        <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center" key={`product-${product.id}-${updateTrigger}`}>
-                          <SafeImage
-                            src={getCachedImageUrl(formatImageUrl(product.image))}
-                            alt={product.name || "Product"}
-                            width={40}
-                            height={40}
-                            className="object-contain"
-                            unoptimized={isExternalImage(product.image)}
-                          />
-                        </div>
-                        <div>
-                          <p className="font-medium">{product.name || "Unnamed Product"}</p>
-                          <p className="text-sm text-slate-600 line-clamp-1">{product.description || "No description"}</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="capitalize">
-                        {product.category?.name || product.category || "uncategorized"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">${product.price || 0}</p>
-                        {(product.original_price || product.originalPrice) && (
-                          <p className="text-sm text-slate-500 line-through">
-                            ${product.original_price || product.originalPrice}
-                          </p>
+                {/* Existing Variants List */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Existing Variants ({productVariants.length})</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Color</TableHead>
+                          <TableHead>Storage</TableHead>
+                          <TableHead>Price</TableHead>
+                          <TableHead>Stock</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {productVariants.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center py-8">
+                              <div className="text-slate-500">
+                                No variants found. Add your first variant above.
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          productVariants.map((variant) => (
+                            <TableRow key={variant.id}>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className="w-4 h-4 rounded border"
+                                    style={{ backgroundColor: variant.color?.hex_code }}
+                                  />
+                                  {variant.color?.name}
+                                </div>
+                              </TableCell>
+                              <TableCell>{variant.storage}</TableCell>
+                              <TableCell>${variant.price}</TableCell>
+                              <TableCell>{variant.stock}</TableCell>
+                              <TableCell>
+                                <Badge variant={variant.is_in_stock ? "default" : "destructive"}>
+                                  {variant.is_in_stock ? "In Stock" : "Out of Stock"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    if (variant.id) {
+                                      deleteVariant(variant.id.toString())
+                                        .then(() => {
+                                          setProductVariants(prev => prev.filter(v => v.id !== variant.id))
+                                          reloadProducts()
+                                          toast({
+                                            title: "Variant deleted",
+                                            description: "Product variant has been deleted successfully.",
+                                          })
+                                        })
+                                        .catch(error => {
+                                          console.error("Error deleting variant:", error)
+                                          toast({
+                                            title: "Error",
+                                            description: "Failed to delete variant.",
+                                            variant: "destructive",
+                                          })
+                                        })
+                                    }
+                                  }}
+                                  className="text-red-500 hover:text-red-700"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))
                         )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">{product.stock || 0}</span>
-                          <span className="text-xs text-slate-500">in stock</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-slate-600">{product.sold || 0}</span>
-                          <span className="text-xs text-slate-500">sold</span>
-                        </div>
-                        <Badge 
-                          variant={product.is_in_stock ? "default" : "destructive"} 
-                          className="text-xs"
-                        >
-                          {product.is_in_stock ? "In Stock" : "Out of Stock"}
-                        </Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="default">Active</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center">
-                        <span className="text-sm">{product.rating || 0}</span>
-                        <span className="text-xs text-slate-500 ml-1">({product.reviews || 0})</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={async () => {
-                            setViewingProduct(product)
-                            setIsViewDialogOpen(true)
-                            // Load product statistics asynchronously
-                            loadProductStats(product.id).catch(console.error)
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </div>
+              
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsVariantDialogOpen(false)}>
+                  Close
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Edit Product Dialog */}
+          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Edit Product</DialogTitle>
+                <DialogDescription>Update product information. Variants can be managed separately.</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-name">Product Name</Label>
+                    <Input
+                      id="edit-name"
+                      value={newProduct.name}
+                      onChange={(e) => setNewProduct(prev => ({ ...prev, name: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-category">Category</Label>
+                    <Select
+                      value={newProduct.category}
+                      onValueChange={(value) => setNewProduct(prev => ({ ...prev, category: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map((category) => (
+                          <SelectItem key={category.id} value={category.id.toString()}>
+                            {category.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-description">Short Description</Label>
+                  <Textarea
+                    id="edit-description"
+                    value={newProduct.description}
+                    onChange={(e) => setNewProduct(prev => ({ ...prev, description: e.target.value }))}
+                    rows={2}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-fullDescription">Full Description</Label>
+                  <Textarea
+                    id="edit-fullDescription"
+                    value={newProduct.full_description}
+                    onChange={(e) => setNewProduct(prev => ({ ...prev, full_description: e.target.value }))}
+                    rows={3}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-badge">Badge (Optional)</Label>
+                  <Input
+                    id="edit-badge"
+                    value={newProduct.badge}
+                    onChange={(e) => setNewProduct(prev => ({ ...prev, badge: e.target.value }))}
+                    placeholder="e.g., New, Sale, Popular"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <ImageUpload
+                    value={newProduct.image || undefined}
+                    onChange={(value) => setNewProduct(prev => ({ ...prev, image: value }))}
+                    label="Product Image"
+                  />
+                </div>
+
+                {/* Features Section */}
+                <div className="space-y-2">
+                  <Label>Features</Label>
+                  <div className="space-y-2">
+                    {newProduct.features.map((feature, index) => (
+                      <div key={index} className="flex gap-2">
+                        <Input
+                          value={feature}
+                          onChange={(e) => {
+                            const newFeatures = [...newProduct.features]
+                            newFeatures[index] = e.target.value
+                            setNewProduct(prev => ({ ...prev, features: newFeatures }))
                           }}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                          placeholder="Enter feature"
+                        />
                         <Button
-                          variant="ghost"
+                          type="button"
+                          variant="outline"
                           size="icon"
                           onClick={() => {
-                            console.log("Edit Product - Categories available:", categories) // Debug log
-                            console.log("Edit Product - Selected product:", product) // Debug log
-                            setEditingProduct(product)
-                            const categoryValue = (product.category?.id || product.category_id || "").toString()
-                            console.log("Edit Product - Category value:", categoryValue) // Debug log
-                            setNewProduct({
-                              name: product.name || "",
-                              category: categoryValue,
-                              price: product.price?.toString() || "",
-                              originalPrice: (product.original_price || product.originalPrice)?.toString() || "",
-                              description: product.description || "",
-                              fullDescription: product.full_description || product.fullDescription || "",
-                              badge: product.badge || "",
-                              image: product.image || "" as string | File | null,
-                              features: product.features || [],
-                              colors: product.colors || [],
-                              storage: product.storage || [],
-                              stock: product.stock?.toString() || "",
-                              sold: product.sold?.toString() || "",
-                              is_in_stock: product.is_in_stock ?? true,
-                            })
-                            setIsEditDialogOpen(true)
+                            const newFeatures = newProduct.features.filter((_, i) => i !== index)
+                            setNewProduct(prev => ({ ...prev, features: newFeatures }))
                           }}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDeleteProduct(product.id)}
-                          className="text-red-500 hover:text-red-700"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-      {/* Product Detail View Dialog */}
-      <Dialog open={isViewDialogOpen} onOpenChange={(open) => {
-        setIsViewDialogOpen(open)
-        if (!open) {
-          setProductStats(null) // Reset stats when dialog closes
-        }
-      }}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Product Details</DialogTitle>
-            <DialogDescription>Complete product information and specifications</DialogDescription>
-          </DialogHeader>
-          {viewingProduct && (
-            <div className="space-y-6">
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* Product Image */}
-                <div className="space-y-4">
-                  <div className="aspect-square bg-slate-100 rounded-lg overflow-hidden" key={`view-product-${viewingProduct.id}-${updateTrigger}`}>
-                    <SafeImage
-                      src={getCachedImageUrl(formatImageUrl(viewingProduct.image))}
-                      alt={viewingProduct.name || "Product"}
-                      width={400}
-                      height={400}
-                      className="w-full h-full object-contain"
-                      unoptimized={isExternalImage(viewingProduct.image)}
-                    />
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setNewProduct(prev => ({ ...prev, features: [...prev.features, ""] }))
+                      }}
+                      className="w-full"
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Feature
+                    </Button>
                   </div>
                 </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleEditProduct} disabled={loading}>
+                  {loading ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    "Update Product"
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
-                {/* Product Information */}
-                <div className="space-y-4">
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      {viewingProduct.badge && (
-                        <Badge className="bg-red-500 hover:bg-red-600">{viewingProduct.badge}</Badge>
-                      )}
-                      <Badge variant="outline" className="capitalize">
-                        {viewingProduct.category?.name || viewingProduct.category || "uncategorized"}
-                      </Badge>
+          {/* View Product Dialog */}
+          <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Product Details - {viewingProduct?.name}</DialogTitle>
+                <DialogDescription>
+                  Detailed view of product information and statistics
+                </DialogDescription>
+              </DialogHeader>
+              
+              {viewingProduct && (
+                <div className="grid gap-6">
+                  {/* Product Image */}
+                  <div className="flex justify-center">
+                    <div className="w-64 h-64 rounded-lg overflow-hidden bg-gray-100">
+                      <SafeImage
+                        src={formatImageUrl(viewingProduct.image)}
+                        alt={viewingProduct.name}
+                        width={256}
+                        height={256}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
-                    <h2 className="text-2xl font-bold">{viewingProduct.name || "Unnamed Product"}</h2>
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-3">
-                      <span className="text-3xl font-bold">${viewingProduct.price || 0}</span>
-                      {(viewingProduct.original_price || viewingProduct.originalPrice) && (
-                        <>
-                          <span className="text-xl text-slate-500 line-through">
-                            ${viewingProduct.original_price || viewingProduct.originalPrice}
+                  {/* Basic Information */}
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <div>
+                        <Label className="text-sm font-semibold text-gray-600">Product Name</Label>
+                        <p className="text-lg font-medium">{viewingProduct.name}</p>
+                      </div>
+                      
+                      <div>
+                        <Label className="text-sm font-semibold text-gray-600">Category</Label>
+                        <p className="text-lg">{viewingProduct.category?.name || 'Uncategorized'}</p>
+                      </div>
+                      
+                      <div>
+                        <Label className="text-sm font-semibold text-gray-600">Badge</Label>
+                        <p className="text-lg">{viewingProduct.badge || 'None'}</p>
+                      </div>
+                      
+                      <div>
+                        <Label className="text-sm font-semibold text-gray-600">Rating</Label>
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center">
+                            {[...Array(5)].map((_, i) => (
+                              <Star
+                                key={i}
+                                className={`h-4 w-4 ${
+                                  i < Math.floor(viewingProduct.rating || 0)
+                                    ? "text-yellow-400 fill-current"
+                                    : "text-gray-300"
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <span className="text-lg">
+                            {viewingProduct.rating} ({viewingProduct.reviews} reviews)
                           </span>
-                          <Badge variant="outline" className="text-green-600 border-green-600">
-                            Save ${((viewingProduct.original_price || viewingProduct.originalPrice) - viewingProduct.price) || 0}
-                          </Badge>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <h3 className="font-medium">Description</h3>
-                    <p className="text-slate-600">{viewingProduct.description || "No description available"}</p>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <h3 className="font-medium">Stock</h3>
-                      <div className="space-y-1">
-                        <p className="text-2xl font-bold text-blue-600">{viewingProduct.stock || 0}</p>
-                        <p className="text-sm text-slate-500">units available</p>
+                        </div>
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <h3 className="font-medium">Sold</h3>
-                      <div className="space-y-1">
-                        <p className="text-2xl font-bold text-green-600">{viewingProduct.sold || 0}</p>
-                        <p className="text-sm text-slate-500">units sold</p>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <h3 className="font-medium">Status</h3>
-                      <Badge 
-                        variant={viewingProduct.is_in_stock ? "default" : "destructive"} 
-                        className="w-fit"
-                      >
-                        {viewingProduct.is_in_stock ? "In Stock" : "Out of Stock"}
-                      </Badge>
-                    </div>
-                  </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <h3 className="font-medium">Rating</h3>
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center">
-                          {[...Array(5)].map((_, i) => (
-                            <Star
-                              key={i}
-                              className={`w-4 h-4 ${
-                                i < Math.floor(viewingProduct.rating || 0)
-                                  ? "fill-yellow-400 text-yellow-400"
-                                  : "text-slate-300"
-                              }`}
-                            />
+                    <div className="space-y-4">
+                      <div>
+                        <Label className="text-sm font-semibold text-gray-600">Price Range</Label>
+                        <p className="text-lg font-semibold text-green-600">
+                          ${viewingProduct.min_price} - ${viewingProduct.max_price}
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <Label className="text-sm font-semibold text-gray-600">Total Stock</Label>
+                        <p className="text-lg">{viewingProduct.total_stock} units</p>
+                      </div>
+                      
+                      <div>
+                        <Label className="text-sm font-semibold text-gray-600">Available Colors</Label>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {viewingProduct.available_colors
+                            ?.filter((color, index, self) => 
+                              index === self.findIndex(c => c.id === color.id)
+                            )
+                            ?.map((color) => (
+                            <div key={color.id} className="flex items-center gap-2 px-2 py-1 bg-gray-100 rounded">
+                              <div
+                                className="w-4 h-4 rounded border"
+                                style={{ backgroundColor: color.hex_code }}
+                              />
+                              <span className="text-sm">{color.name}</span>
+                            </div>
                           ))}
                         </div>
-                        <span className="text-sm text-slate-600">
-                          {viewingProduct.rating || 0} ({viewingProduct.reviews || 0} reviews)
-                        </span>
                       </div>
-                    </div>
-                    <div className="space-y-2">
-                      <h3 className="font-medium">Product ID</h3>
-                      <p className="text-slate-600">#{viewingProduct.id}</p>
+                      
+                      <div>
+                        <Label className="text-sm font-semibold text-gray-600">Storage Options</Label>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {[...new Set(viewingProduct.available_storages)]
+                            ?.sort((a, b) => {
+                              // Convert storage strings to numbers for proper sorting
+                              const getValue = (storage: string) => {
+                                const num = parseFloat(storage);
+                                if (storage.includes('TB')) return num * 1000;
+                                return num;
+                              };
+                              return getValue(a) - getValue(b);
+                            })
+                            ?.map((storage) => (
+                            <Badge key={storage} variant="outline">
+                              {storage}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Additional Product Details */}
-                  {viewingProduct.colors && viewingProduct.colors.length > 0 && (
-                    <div className="space-y-2">
-                      <h3 className="font-medium">Available Colors</h3>
-                      <div className="flex gap-2">
-                        {viewingProduct.colors.map((color: string, index: number) => (
-                          <div
-                            key={index}
-                            className="w-8 h-8 rounded-full border-2 border-slate-200"
-                            style={{ backgroundColor: color?.toLowerCase() || "#000000" }}
-                            title={color || "Color"}
-                          />
-                        ))}
+                  {/* Descriptions */}
+                  <div className="space-y-4">
+                    <div>
+                      <Label className="text-sm font-semibold text-gray-600">Short Description</Label>
+                      <p className="text-gray-700 mt-1">{viewingProduct.description}</p>
+                    </div>
+                    
+                    <div>
+                      <Label className="text-sm font-semibold text-gray-600">Full Description</Label>
+                      <p className="text-gray-700 mt-1">{viewingProduct.full_description}</p>
+                    </div>
+                    
+                    {viewingProduct.features && viewingProduct.features.length > 0 && (
+                      <div>
+                        <Label className="text-sm font-semibold text-gray-600">Features</Label>
+                        <ul className="list-disc list-inside mt-2 space-y-1">
+                          {viewingProduct.features.map((feature, index) => (
+                            <li key={index} className="text-gray-700">{feature}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Product Variants */}
+                  {viewingProduct.variants && viewingProduct.variants.length > 0 && (
+                    <div>
+                      <Label className="text-sm font-semibold text-gray-600">Product Variants</Label>
+                      <div className="mt-2">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Color</TableHead>
+                              <TableHead>Storage</TableHead>
+                              <TableHead>Price</TableHead>
+                              <TableHead>Stock</TableHead>
+                              <TableHead>Status</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {viewingProduct.variants.map((variant) => (
+                              <TableRow key={variant.id}>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <div
+                                      className="w-4 h-4 rounded border"
+                                      style={{ backgroundColor: variant.color?.hex_code }}
+                                    />
+                                    {variant.color?.name}
+                                  </div>
+                                </TableCell>
+                                <TableCell>{variant.storage}</TableCell>
+                                <TableCell>${variant.price}</TableCell>
+                                <TableCell>{variant.stock}</TableCell>
+                                <TableCell>
+                                  <Badge variant={variant.is_in_stock ? "default" : "destructive"}>
+                                    {variant.is_in_stock ? "In Stock" : "Out of Stock"}
+                                  </Badge>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
                       </div>
                     </div>
                   )}
 
-                  {viewingProduct.storage && viewingProduct.storage.length > 0 && (
-                    <div className="space-y-2">
-                      <h3 className="font-medium">Storage Options</h3>
-                      <div className="flex gap-2">
-                        {viewingProduct.storage.map((size: string, index: number) => (
-                          <Badge key={index} variant="outline">
-                            {size || "Unknown"}
-                          </Badge>
-                        ))}
+                  {/* Product Statistics */}
+                  {productStats && (
+                    <div>
+                      <Label className="text-sm font-semibold text-gray-600">Product Statistics</Label>
+                      <div className="grid grid-cols-4 gap-4 mt-2">
+                        <Card>
+                          <CardContent className="p-4">
+                            <div className="text-2xl font-bold">{productStats.totalSales}</div>
+                            <p className="text-xs text-muted-foreground">Total Sales</p>
+                          </CardContent>
+                        </Card>
+                        <Card>
+                          <CardContent className="p-4">
+                            <div className="text-2xl font-bold">${productStats.revenue}</div>
+                            <p className="text-xs text-muted-foreground">Revenue</p>
+                          </CardContent>
+                        </Card>
+                        <Card>
+                          <CardContent className="p-4">
+                            <div className="text-2xl font-bold">{productStats.pageViews}</div>
+                            <p className="text-xs text-muted-foreground">Page Views</p>
+                          </CardContent>
+                        </Card>
+                        <Card>
+                          <CardContent className="p-4">
+                            <div className="text-2xl font-bold">{productStats.conversionRate}%</div>
+                            <p className="text-xs text-muted-foreground">Conversion Rate</p>
+                          </CardContent>
+                        </Card>
                       </div>
                     </div>
                   )}
 
-                  {viewingProduct.features && viewingProduct.features.length > 0 && (
-                    <div className="space-y-2">
-                      <h3 className="font-medium">Key Features</h3>
-                      <ul className="list-disc list-inside space-y-1 text-sm text-slate-600">
-                        {viewingProduct.features.map((feature: string, index: number) => (
-                          <li key={index}>{feature || "Feature"}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                  {/* Creation Date */}
+                  <div>
+                    <Label className="text-sm font-semibold text-gray-600">Created Date</Label>
+                    <p className="text-gray-700 mt-1">
+                      {new Date(viewingProduct.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
                 </div>
-              </div>
-
-              {/* Product Stats */}
-              <div className="grid grid-cols-4 gap-4 pt-6 border-t">
-                {loadingStats ? (
-                  <div className="col-span-4 text-center py-4">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-2 text-sm text-slate-600">Loading statistics...</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-blue-600">{productStats?.totalSales || 0}</p>
-                      <p className="text-sm text-slate-600">Total Sales</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-green-600">${productStats?.revenue?.toLocaleString() || '0'}</p>
-                      <p className="text-sm text-slate-600">Revenue</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-purple-600">{productStats?.pageViews?.toLocaleString() || '0'}</p>
-                      <p className="text-sm text-slate-600">Page Views</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-orange-600">{productStats?.conversionRate || '0%'}</p>
-                      <p className="text-sm text-slate-600">Conversion</p>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
-              Close
-            </Button>
-            <Button
-              onClick={() => {
-                console.log("View Dialog Edit - Categories available:", categories) // Debug log
-                console.log("View Dialog Edit - Selected product:", viewingProduct) // Debug log
-                setIsViewDialogOpen(false)
-                setEditingProduct(viewingProduct)
-                const categoryValue = (viewingProduct.category?.id || viewingProduct.category_id || "").toString()
-                console.log("View Dialog Edit - Category value:", categoryValue) // Debug log
-                setNewProduct({
-                  name: viewingProduct.name || "",
-                  category: categoryValue,
-                  price: viewingProduct.price?.toString() || "",
-                  originalPrice: (viewingProduct.original_price || viewingProduct.originalPrice)?.toString() || "",
-                  description: viewingProduct.description || "",
-                  fullDescription: viewingProduct.full_description || viewingProduct.fullDescription || "",
-                  badge: viewingProduct.badge || "",
-                  image: viewingProduct.image || "" as string | File | null,
-                  features: viewingProduct.features || [],
-                  colors: viewingProduct.colors || [],
-                  storage: viewingProduct.storage || [],
-                  stock: viewingProduct.stock?.toString() || "",
-                  sold: viewingProduct.sold?.toString() || "",
-                  is_in_stock: viewingProduct.is_in_stock ?? true,
-                })
-                setIsEditDialogOpen(true)
-                // Reset stats since we're switching to edit mode
-                setProductStats(null)
-              }}
-            >
-              Edit Product
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Product Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
-        setIsEditDialogOpen(open)
-        if (!open) {
-          setEditingProduct(null)
-          setNewProduct({
-            name: "",
-            category: "",
-            price: "",
-            originalPrice: "",
-            description: "",
-            fullDescription: "",
-            badge: "",
-            image: "" as string | File | null,
-            features: [],
-            colors: [],
-            storage: [],
-            stock: "",
-            sold: "",
-            is_in_stock: true,
-          })
-        }
-      }}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Edit Product</DialogTitle>
-            <DialogDescription>Update product information</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Product Name</Label>
-                <Input
-                  id="name"
-                  value={newProduct.name}
-                  onChange={(e) => setNewProduct((prev) => ({ ...prev, name: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="category">Category</Label>
-                <Select
-                  value={newProduct.category}
-                  onValueChange={(value) => {
-                    console.log("Edit Dialog - Category selected:", value) // Debug log
-                    setNewProduct((prev) => ({ ...prev, category: value }))
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((category) => {
-                      console.log("Edit Dialog - Rendering category:", category) // Debug log
-                      return (
-                        <SelectItem key={category.id} value={category.id.toString()}>
-                          {category.name}
-                        </SelectItem>
-                      )
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="price">Price</Label>
-                <Input
-                  id="price"
-                  type="number"
-                  value={newProduct.price}
-                  onChange={(e) => setNewProduct((prev) => ({ ...prev, price: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="originalPrice">Original Price (Optional)</Label>
-                <Input
-                  id="originalPrice"
-                  type="number"
-                  value={newProduct.originalPrice}
-                  onChange={(e) => setNewProduct((prev) => ({ ...prev, originalPrice: e.target.value }))}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="stock">Stock Quantity</Label>
-                <Input
-                  id="stock"
-                  type="number"
-                  min="0"
-                  value={newProduct.stock}
-                  onChange={(e) => setNewProduct((prev) => ({ ...prev, stock: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="sold">Sold Quantity</Label>
-                <Input
-                  id="sold"
-                  type="number"
-                  min="0"
-                  value={newProduct.sold}
-                  onChange={(e) => setNewProduct((prev) => ({ ...prev, sold: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="is_in_stock">In Stock Status</Label>
-                <div className="flex items-center space-x-2 mt-2">
-                  <input
-                    id="is_in_stock"
-                    type="checkbox"
-                    checked={newProduct.is_in_stock}
-                    onChange={(e) => setNewProduct((prev) => ({ ...prev, is_in_stock: e.target.checked }))}
-                    className="w-4 h-4"
-                  />
-                  <Label htmlFor="is_in_stock" className="text-sm">Product is in stock</Label>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="description">Short Description</Label>
-              <Textarea
-                id="description"
-                value={newProduct.description}
-                onChange={(e) => setNewProduct((prev) => ({ ...prev, description: e.target.value }))}
-                rows={2}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="fullDescription">Full Description</Label>
-              <Textarea
-                id="fullDescription"
-                value={newProduct.fullDescription}
-                onChange={(e) => setNewProduct((prev) => ({ ...prev, fullDescription: e.target.value }))}
-                rows={3}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="badge">Badge (Optional)</Label>
-              <Input
-                id="badge"
-                value={newProduct.badge}
-                onChange={(e) => setNewProduct((prev) => ({ ...prev, badge: e.target.value }))}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <ImageUpload
-                value={newProduct.image || undefined}
-                onChange={(value) => setNewProduct((prev) => ({ ...prev, image: value }))}
-                label="Product Image"
-              />
-            </div>
-
-            {/* Features Section */}
-            <div className="space-y-2">
-              <Label>Features</Label>
-              <div className="space-y-2">
-                {newProduct.features.map((feature, index) => (
-                  <div key={index} className="flex gap-2">
-                    <Input
-                      value={feature}
-                      onChange={(e) => {
-                        const newFeatures = [...newProduct.features]
-                        newFeatures[index] = e.target.value
-                        setNewProduct((prev) => ({ ...prev, features: newFeatures }))
-                      }}
-                      placeholder="Enter feature"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={() => {
-                        const newFeatures = newProduct.features.filter((_, i) => i !== index)
-                        setNewProduct((prev) => ({ ...prev, features: newFeatures }))
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setNewProduct((prev) => ({ ...prev, features: [...prev.features, ""] }))
-                  }}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Feature
+              )}
+              
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
+                  Close
                 </Button>
-              </div>
-            </div>
-
-            {/* Colors Section */}
-            <div className="space-y-2">
-              <Label>Colors</Label>
-              <div className="space-y-2">
-                {newProduct.colors.map((color, index) => (
-                  <div key={index} className="flex gap-2 items-center">
-                    <input
-                      type="color"
-                      value={color}
-                      onChange={(e) => {
-                        const newColors = [...newProduct.colors]
-                        newColors[index] = e.target.value
-                        setNewProduct((prev) => ({ ...prev, colors: newColors }))
-                      }}
-                      className="w-12 h-10 rounded border"
-                    />
-                    <Input
-                      value={color}
-                      onChange={(e) => {
-                        const newColors = [...newProduct.colors]
-                        newColors[index] = e.target.value
-                        setNewProduct((prev) => ({ ...prev, colors: newColors }))
-                      }}
-                      placeholder="#000000"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={() => {
-                        const newColors = newProduct.colors.filter((_, i) => i !== index)
-                        setNewProduct((prev) => ({ ...prev, colors: newColors }))
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
                 <Button
-                  type="button"
-                  variant="outline"
                   onClick={() => {
-                    setNewProduct((prev) => ({ ...prev, colors: [...prev.colors, "#000000"] }))
+                    setIsViewDialogOpen(false)
+                    setEditingProduct(viewingProduct)
+                    if (viewingProduct) {
+                      setNewProduct({
+                        name: viewingProduct.name || "",
+                        category: viewingProduct.category?.id?.toString() || "",
+                        description: viewingProduct.description || "",
+                        full_description: viewingProduct.full_description || "",
+                        badge: viewingProduct.badge || "",
+                        image: viewingProduct.image || "",
+                        features: viewingProduct.features || [],
+                      })
+                    }
+                    setIsEditDialogOpen(true)
                   }}
                 >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Color
+                  Edit Product
                 </Button>
-              </div>
-            </div>
-
-            {/* Storage Section */}
-            <div className="space-y-2">
-              <Label>Storage Options</Label>
-              <div className="space-y-2">
-                {newProduct.storage.map((storage, index) => (
-                  <div key={index} className="flex gap-2">
-                    <Input
-                      value={storage}
-                      onChange={(e) => {
-                        const newStorage = [...newProduct.storage]
-                        newStorage[index] = e.target.value
-                        setNewProduct((prev) => ({ ...prev, storage: newStorage }))
-                      }}
-                      placeholder="e.g., 128GB, 256GB"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={() => {
-                        const newStorage = newProduct.storage.filter((_, i) => i !== index)
-                        setNewProduct((prev) => ({ ...prev, storage: newStorage }))
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setNewProduct((prev) => ({ ...prev, storage: [...prev.storage, ""] }))
-                  }}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Storage Option
-                </Button>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsEditDialogOpen(false)
-                setEditingProduct(null)
-                setNewProduct({
-                  name: "",
-                  category: "",
-                  price: "",
-                  originalPrice: "",
-                  description: "",
-                  fullDescription: "",
-                  badge: "",
-                  image: "",
-                  features: [],
-                  colors: [],
-                  storage: [],
-                  stock: "",
-                  sold: "",
-                  is_in_stock: true,
-                })
-              }}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleEditProduct}>Update Product</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </>
       )}
     </div>

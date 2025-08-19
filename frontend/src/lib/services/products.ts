@@ -31,6 +31,103 @@ function buildFormDataIfNeeded(data: any): FormData | any {
   return data
 }
 
+// Product Color APIs
+export async function getAllColors() {
+  try {
+    const response = await api.get("/product-colors/")
+    return response.data
+  } catch (error) {
+    console.error("Error fetching colors:", error)
+    throw error
+  }
+}
+
+export async function createColor(colorData: any) {
+  try {
+    const response = await api.post("/product-colors/", colorData)
+    return response.data
+  } catch (error) {
+    console.error("Error creating color:", error)
+    throw error
+  }
+}
+
+// Product Variant APIs
+export async function getAllVariants(productId?: string) {
+  try {
+    const params = new URLSearchParams()
+    if (productId) {
+      params.append('product_id', productId)
+    }
+    
+    const response = await api.get(`/product-variants/?${params.toString()}`)
+    return response.data
+  } catch (error) {
+    console.error("Error fetching variants:", error)
+    throw error
+  }
+}
+
+export async function getProductVariants(productId: string) {
+  try {
+    const response = await api.get(`/products/${productId}/variants/`)
+    return response.data
+  } catch (error) {
+    console.error("Error fetching product variants:", error)
+    throw error
+  }
+}
+
+export async function createVariant(variantData: any) {
+  try {
+    const response = await api.post("/product-variants/", variantData)
+    return response.data
+  } catch (error) {
+    console.error("Error creating variant:", error)
+    throw error
+  }
+}
+
+export async function updateVariant(variantId: string, variantData: any) {
+  try {
+    const response = await api.put(`/product-variants/${variantId}/`, variantData)
+    return response.data
+  } catch (error) {
+    console.error("Error updating variant:", error)
+    throw error
+  }
+}
+
+export async function deleteVariant(variantId: string) {
+  try {
+    const response = await api.delete(`/product-variants/${variantId}/`)
+    return response.data
+  } catch (error) {
+    console.error("Error deleting variant:", error)
+    throw error
+  }
+}
+
+export async function reduceVariantStock(variantId: string, quantity: number) {
+  try {
+    const response = await api.post(`/product-variants/${variantId}/reduce_stock/`, { quantity })
+    return response.data
+  } catch (error) {
+    console.error("Error reducing variant stock:", error)
+    throw error
+  }
+}
+
+export async function increaseVariantStock(variantId: string, quantity: number) {
+  try {
+    const response = await api.post(`/product-variants/${variantId}/increase_stock/`, { quantity })
+    return response.data
+  } catch (error) {
+    console.error("Error increasing variant stock:", error)
+    throw error
+  }
+}
+
 export async function getProductsByCategory(categorySlug: string) {
   try {
     const params = new URLSearchParams()

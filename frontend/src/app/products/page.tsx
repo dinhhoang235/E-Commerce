@@ -24,20 +24,48 @@ interface Category {
   description?: string
   image?: string
   is_active?: boolean
+  product_count?: number
+  parent?: Category | null
+  parent_id?: number | null
 }
 
-// Define the Product interface
+// Define ProductColor interface
+interface ProductColor {
+  id: number
+  name: string
+  hex_code: string
+}
+
+// Define ProductVariant interface
+interface ProductVariant {
+  id: number
+  color: ProductColor
+  storage: string
+  price: string
+  stock: number
+  sold: number
+  is_in_stock: boolean
+  total_stock: number
+}
+
+// Define the Product interface to match backend structure
 interface Product {
   id: string | number
   name: string
   description: string
-  price: number
-  originalPrice?: number
+  min_price: number
+  max_price: number
   image?: string
-  category: string | Category
+  category: Category
   rating: number
   reviews: number
   badge?: string
+  variants: ProductVariant[]
+  available_colors: ProductColor[]
+  available_storages: string[]
+  total_stock: number
+  features?: string[]
+  full_description?: string
 }
 
 export default function ProductsPage() {
@@ -157,9 +185,7 @@ export default function ProductsPage() {
             // Get category name for search
             let categoryName = "";
             if (product.category) {
-              categoryName = typeof product.category === 'object' ? 
-                product.category.name.toLowerCase() : 
-                String(product.category).toLowerCase();
+              categoryName = product.category.name.toLowerCase();
             }
             
             return (
@@ -176,9 +202,9 @@ export default function ProductsPage() {
         try {
           switch (sortBy) {
             case "price-low":
-              return a.price - b.price
+              return a.min_price - b.min_price
             case "price-high":
-              return b.price - a.price
+              return b.max_price - a.max_price
             case "rating":
               return b.rating - a.rating
             default:
@@ -239,11 +265,14 @@ export default function ProductsPage() {
         return;
       }
       
+      // Use the minimum price variant for cart
+      const defaultPrice = product.min_price || 0;
+      
       addItem({
         id: parseInt(String(product.id)) || 0,  // Convert to string first, then to number, fallback to 0
         productId: parseInt(String(product.id)) || 0,  // Add productId property required by cart provider
         name: product.name || "Unknown Product",
-        price: product.price || 0,
+        price: defaultPrice,
         image: product.image || "/placeholder.svg",  // Provide a default image
       });
     } catch (err) {
@@ -428,16 +457,18 @@ export default function ProductsPage() {
                     <span className="text-sm text-slate-600">({product.reviews})</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xl font-bold">${product.price}</span>
-                    {product.originalPrice && (
-                      <span className="text-sm text-slate-500 line-through">${product.originalPrice}</span>
+                    {product.min_price === product.max_price ? (
+                      <span className="text-xl font-bold">${product.min_price}</span>
+                    ) : (
+                      <span className="text-xl font-bold">${product.min_price} - ${product.max_price}</span>
                     )}
                   </div>
                   <div className="flex flex-col gap-2">
-                    <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={() => handleAddToCart(product)}>
-                      <ShoppingCart className="w-4 h-4 mr-2" />
-                      Add to Cart
-                    </Button>
+                    <Link href={`/products/${product.id}`} className="w-full">
+                      <Button className="w-full bg-blue-600 hover:bg-blue-700 justify-center">
+                        Buy
+                      </Button>
+                    </Link>
                     <WishlistButton 
                       productId={typeof product.id === 'string' ? parseInt(product.id) : product.id}
                       variant="text"

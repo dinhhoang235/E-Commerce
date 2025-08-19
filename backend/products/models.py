@@ -5,6 +5,14 @@ import os
 from django.db.models import Avg, Count
 
 
+STORAGE_CHOICES = [
+    ("128GB", "128 GB"),
+    ("256GB", "256 GB"),
+    ("512GB", "512 GB"),
+    ("1TB", "1 TB"),
+    ("2TB", "2 TB"),
+]
+
 class InsufficientStockError(Exception):
     """Raised when there's insufficient stock for a product"""
     pass
@@ -50,64 +58,25 @@ class Category(models.Model):
 class Product(models.Model):
     name = models.CharField(max_length=255)
     category = models.ForeignKey(Category, related_name='products', on_delete=models.CASCADE)
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    original_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     image = models.ImageField(upload_to=upload_image_path, blank=True, null=True)
+    
     rating = models.FloatField(default=0.0)
     reviews = models.PositiveIntegerField(default=0)
     badge = models.CharField(max_length=50, blank=True, null=True)
+    
     description = models.TextField(blank=True)
     full_description = models.TextField(blank=True)
     features = models.JSONField(default=list)
-    colors = models.JSONField(default=list)
-    storage = models.JSONField(default=list)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
-    stock = models.PositiveIntegerField(default=0)
-    sold = models.PositiveIntegerField(default=0)
-    is_in_stock = models.BooleanField(default=True)
-
+    
     class Meta:
         ordering = ['-created_at']
 
     def __str__(self):
         return self.name
-    
-    def update_stock_status(self):
-        self.is_in_stock = self.stock > 0
-        self.save(update_fields=['is_in_stock'])
-    
-    def reduce_stock(self, quantity):
-        """
-        Reduce stock when a product is purchased.
-        Raises InsufficientStockError if insufficient stock.
-        """
-        if self.stock < quantity:
-            raise InsufficientStockError(f"Insufficient stock for {self.name}. Available: {self.stock}, Requested: {quantity}")
-        
-        self.stock -= quantity
-        self.sold += quantity
-        self.update_stock_status()
-        self.save(update_fields=['stock', 'sold', 'is_in_stock'])
-    
-    def increase_stock(self, quantity):
-        """
-        Increase stock when an order is cancelled or returned.
-        """
-        self.stock += quantity
-        if self.sold >= quantity:
-            self.sold -= quantity
-        else:
-            self.sold = 0
-        self.update_stock_status()
-        self.save(update_fields=['stock', 'sold', 'is_in_stock'])
-    
-    def check_stock_availability(self, quantity):
-        """
-        Check if the requested quantity is available in stock.
-        """
-        return self.stock >= quantity
     
     def update_rating_and_review_count(self):
         """
@@ -147,3 +116,78 @@ class Product(models.Model):
             img = img.convert("RGB")
             img.thumbnail((300, 300))
             img.save(self.image.path, format="JPEG", quality=90)
+            
+class ProductColor(models.Model):
+    name = models.CharField(max_length=50)   
+    hex_code = models.CharField(max_length=7, blank=True, null=True)
+
+    class Meta:
+        verbose_name = "Product Color"
+        verbose_name_plural = "Product Colors"
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.hex_code})" if self.hex_code else self.name
+
+            
+class ProductVariant(models.Model):
+    product = models.ForeignKey(Product, related_name='variants', on_delete=models.CASCADE)
+    color = models.ForeignKey(ProductColor, on_delete=models.CASCADE, related_name="variants")
+    storage = models.CharField(max_length=50, choices=STORAGE_CHOICES, blank=True, null=True)
+
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    stock = models.PositiveIntegerField(default=0)
+    sold = models.PositiveIntegerField(default=0)
+    is_in_stock = models.BooleanField(default=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["product", "color", "storage"], name="unique_product_variant")
+        ]
+        ordering = ["product", "color", "storage"]
+        
+    def __str__(self):
+        return f'{self.product.name} - {self.color or "No Color"} - {self.storage or "No Storage"}'
+    
+    def update_stock_status(self):
+        self.is_in_stock = self.stock > 0
+        self.save(update_fields=['is_in_stock'])
+    
+    def reduce_stock(self, quantity):
+        """
+        Reduce stock when a product is purchased.
+        Raises InsufficientStockError if insufficient stock.
+        """
+        if self.stock < quantity:
+            raise InsufficientStockError(
+                f"Insufficient stock for {self.product.name} - {self.color or 'No Color'} - {self.storage or 'No Storage'}. "
+                f"Available: {self.stock}, Requested: {quantity}"
+            )
+        self.stock -= quantity
+        self.sold += quantity
+        self.update_stock_status()
+        self.save(update_fields=['stock', 'sold', 'is_in_stock'])
+    
+    def increase_stock(self, quantity):
+        """
+        Increase stock when an order is cancelled or returned.
+        """
+        self.stock += quantity
+        if self.sold >= quantity:
+            self.sold -= quantity
+        else:
+            self.sold = 0
+        self.update_stock_status()
+        self.save(update_fields=['stock', 'sold', 'is_in_stock'])
+    
+    def check_stock_availability(self, quantity):
+        """
+        Check if the requested quantity is available in stock.
+        """
+        return self.stock >= quantity
+    
+    

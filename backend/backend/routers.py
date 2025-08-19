@@ -2,7 +2,7 @@ from rest_framework.routers import DefaultRouter
 
 # Import ViewSets
 from users.views import UserViewSet, AddressViewSet
-from products.views import CategoryViewSet, ProductViewSet
+from products.views import CategoryViewSet, ProductViewSet, ProductColorViewSet, ProductVariantViewSet
 from cart.views import CartViewSet
 from reviews.views import ReviewViewSet
 from wishlist.views import WishlistViewSet
@@ -14,6 +14,8 @@ router.register(r'users', UserViewSet, basename='user')
 router.register(r'addresses', AddressViewSet, basename='address')
 router.register(r'categories', CategoryViewSet)
 router.register(r'products', ProductViewSet)
+router.register(r'product-colors', ProductColorViewSet)
+router.register(r'product-variants', ProductVariantViewSet)
 router.register(r'cart', CartViewSet, basename='cart')
 router.register(r'reviews', ReviewViewSet, basename='review')
 router.register(r'wishlist', WishlistViewSet, basename='wishlist')
