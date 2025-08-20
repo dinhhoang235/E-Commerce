@@ -1,6 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
-from products.models import Product
+from products.models import ProductVariant
 from django.core.exceptions import ValidationError
 
 
@@ -27,40 +27,32 @@ class Cart(models.Model):
 
 class CartItem(models.Model):
     cart = models.ForeignKey(Cart, related_name='items', on_delete=models.CASCADE)
-    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    product_variant = models.ForeignKey(ProductVariant, on_delete=models.CASCADE, null=True, blank=True)
     quantity = models.PositiveIntegerField(default=1)
-    color = models.CharField(max_length=50, blank=True, null=True)
-    storage = models.CharField(max_length=50, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('cart', 'product', 'color', 'storage')
+        unique_together = ('cart', 'product_variant')
 
     def __str__(self):
-        options = []
-        if self.color:
-            options.append(f"Color: {self.color}")
-        if self.storage:
-            options.append(f"Storage: {self.storage}")
-        
-        option_str = f" ({', '.join(options)})" if options else ""
-        return f"{self.quantity}x {self.product.name}{option_str}"
+        return f"{self.quantity}x {self.product_variant}"
 
     @property
     def total_price(self):
-        return self.product.price * self.quantity
+        return self.product_variant.price * self.quantity
 
     def clean(self):
         if self.quantity <= 0:
             raise ValidationError("Quantity must be greater than 0")
         
-        # Validate color and storage options
-        if self.color and self.color not in self.product.colors:
-            raise ValidationError(f"Color '{self.color}' is not available for this product")
-        
-        if self.storage and self.storage not in self.product.storage:
-            raise ValidationError(f"Storage '{self.storage}' is not available for this product")
+        # Validate stock availability
+        if self.product_variant and self.quantity:
+            if not self.product_variant.check_stock_availability(self.quantity):
+                raise ValidationError(
+                    f"Insufficient stock for {self.product_variant}. "
+                    f"Available: {self.product_variant.stock}, Requested: {self.quantity}"
+                )
 
     def save(self, *args, **kwargs):
         self.clean()

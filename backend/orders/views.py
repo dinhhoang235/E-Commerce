@@ -395,37 +395,47 @@ def stock_monitoring(request):
     try:
         threshold = int(request.GET.get('threshold', 10))
         
-        # Get stock information using OrderManager utilities
-        low_stock_products = OrderManager.get_low_stock_products(threshold)
-        out_of_stock_products = OrderManager.get_out_of_stock_products()
+        # Get stock information using OrderManager utilities for product variants
+        low_stock_variants = OrderManager.get_low_stock_variants(threshold)
+        out_of_stock_variants = OrderManager.get_out_of_stock_variants()
         
-        # Serialize the data
+        # Serialize the data for product variants
         low_stock_data = [
             {
-                'id': product.id,
-                'name': product.name,
-                'stock': product.stock,
-                'category': product.category.name,
-                'price': float(product.price)
+                'id': variant.id,
+                'variant_id': variant.id,
+                'product_id': variant.product.id,
+                'name': f"{variant.product.name} - {variant.color.name if variant.color else 'No Color'} - {variant.storage or 'No Storage'}",
+                'product_name': variant.product.name,
+                'color': variant.color.name if variant.color else 'No Color',
+                'storage': variant.storage or 'No Storage',
+                'stock': variant.stock,
+                'category': variant.product.category.name,
+                'price': float(variant.price)
             }
-            for product in low_stock_products
+            for variant in low_stock_variants
         ]
         
         out_of_stock_data = [
             {
-                'id': product.id,
-                'name': product.name,
-                'category': product.category.name,
-                'price': float(product.price),
-                'sold': product.sold
+                'id': variant.id,
+                'variant_id': variant.id,
+                'product_id': variant.product.id,
+                'name': f"{variant.product.name} - {variant.color.name if variant.color else 'No Color'} - {variant.storage or 'No Storage'}",
+                'product_name': variant.product.name,
+                'color': variant.color.name if variant.color else 'No Color',
+                'storage': variant.storage or 'No Storage',
+                'category': variant.product.category.name,
+                'price': float(variant.price),
+                'sold': variant.sold
             }
-            for product in out_of_stock_products
+            for variant in out_of_stock_variants
         ]
         
         return Response({
             'threshold': threshold,
-            'low_stock_products': low_stock_data,
-            'out_of_stock_products': out_of_stock_data,
+            'low_stock_variants': low_stock_data,
+            'out_of_stock_variants': out_of_stock_data,
             'low_stock_count': len(low_stock_data),
             'out_of_stock_count': len(out_of_stock_data)
         })
@@ -495,10 +505,14 @@ def validate_cart_stock(request):
                 'message': 'All items are available in stock',
                 'validated_items': [
                     {
-                        'product_id': item['product'].id,
-                        'product_name': item['product'].name,
+                        'product_variant_id': item['product_variant'].id,
+                        'product_id': item['product_variant'].product.id,
+                        'product_name': item['product_variant'].product.name,
+                        'variant_name': f"{item['product_variant'].product.name} - {item['product_variant'].color.name if item['product_variant'].color else 'No Color'} - {item['product_variant'].storage or 'No Storage'}",
+                        'color': item['product_variant'].color.name if item['product_variant'].color else 'No Color',
+                        'storage': item['product_variant'].storage or 'No Storage',
                         'requested_quantity': item['quantity'],
-                        'available_stock': item['product'].stock,
+                        'available_stock': item['product_variant'].stock,
                         'price': float(item['price'])
                     }
                     for item in validated_items

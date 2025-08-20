@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react"
-import { cartService, type Cart, type CartItem as APICartItem, type AddToCartData } from "@/lib/services/cart"
+import { cartService, type Cart, type CartItem as APICartItem, type AddToCartData, findProductVariantId } from "@/lib/services/cart"
 import { useAuth } from "@/components/auth-provider"
 
 interface CartItem {
@@ -31,16 +31,19 @@ const CartContext = createContext<CartContextType | undefined>(undefined)
 
 // Helper function to convert API cart item to local cart item format
 const convertAPICartItem = (apiItem: APICartItem): CartItem => {
-  const price = typeof apiItem.product.price === 'string' ? parseFloat(apiItem.product.price) : apiItem.product.price
+  const variant = apiItem.product_variant
+  const product = variant.product
+  const price = typeof variant.price === 'string' ? parseFloat(variant.price) : variant.price
+  
   return {
-    id: apiItem.product.id,
+    id: product.id,
     itemId: apiItem.id,
-    name: apiItem.product.name,
+    name: product.name,
     price: isNaN(price) ? 0 : price,
     quantity: apiItem.quantity,
-    image: apiItem.product.image,
-    color: apiItem.color,
-    storage: apiItem.storage,
+    image: product.image || '',
+    color: variant.color?.name,
+    storage: variant.storage,
   }
 }
 
@@ -92,14 +95,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setLoading(true)
       setError(null)
       
-      const addData: AddToCartData = {
-        product_id: newItem.productId,
-        quantity: 1,
-        color: newItem.color || '',
-        storage: newItem.storage || '',
+      // Find the product variant ID based on product, color, and storage
+      const variantId = await findProductVariantId(newItem.productId, newItem.color, newItem.storage)
+      
+      if (!variantId) {
+        setError(`Product variant not found for ${newItem.name} with color: ${newItem.color || 'none'} and storage: ${newItem.storage || 'none'}. Please select a valid color and storage option.`)
+        return
       }
       
-      console.log('Adding item to cart:', addData) // Debug log
+      const addData: AddToCartData = {
+        product_variant_id: variantId,
+        quantity: 1,
+      }
+      
       await cartService.addItem(addData)
       await refreshCart() // Refresh cart to get updated data
     } catch (err) {

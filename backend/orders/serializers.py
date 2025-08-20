@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import Order, OrderItem
-from products.models import Product
+from products.models import ProductVariant
 from users.models import Address
 from cart.models import CartItem
 from .utils import OrderManager
@@ -10,14 +10,16 @@ from datetime import datetime
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source='product.name', read_only=True)
-    product_price = serializers.DecimalField(source='product.price', max_digits=10, decimal_places=2, read_only=True)
-    product_image = serializers.ImageField(source='product.image', read_only=True)
+    product_variant_name = serializers.CharField(source='product_variant.product.name', read_only=True)
+    product_variant_color = serializers.CharField(source='product_variant.color.name', read_only=True)
+    product_variant_storage = serializers.CharField(source='product_variant.storage', read_only=True)
+    product_variant_price = serializers.DecimalField(source='product_variant.price', max_digits=10, decimal_places=2, read_only=True)
+    product_variant_image = serializers.ImageField(source='product_variant.product.image', read_only=True)
     
     class Meta:
         model = OrderItem
-        fields = ['id', 'product', 'product_name', 'quantity', 'price', 'product_price', 'product_image']
-        read_only_fields = ['id', 'product_name', 'product_price', 'product_image']
+        fields = ['id', 'product_variant', 'product_variant_name', 'product_variant_color', 'product_variant_storage', 'quantity', 'price', 'product_variant_price', 'product_variant_image']
+        read_only_fields = ['id', 'product_variant_name', 'product_variant_color', 'product_variant_storage', 'product_variant_price', 'product_variant_image']
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -133,30 +135,49 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating new orders"""
     items = serializers.ListField(write_only=True, required=False)
     shipping_address_id = serializers.IntegerField(write_only=True, required=False)
+    shipping_address = serializers.DictField(write_only=True, required=False)
     
     class Meta:
         model = Order
-        fields = ['shipping_address_id', 'shipping_method', 'items']
+        fields = ['shipping_address_id', 'shipping_address', 'shipping_method', 'items']
     
     def create(self, validated_data):
         user = self.context['request'].user
         items_data = validated_data.pop('items', [])
         shipping_address_id = validated_data.pop('shipping_address_id', None)
+        shipping_address_data = validated_data.pop('shipping_address', None)
         
-        # Get shipping address
+        # Get or create shipping address
         shipping_address = None
         if shipping_address_id:
             try:
                 shipping_address = Address.objects.get(id=shipping_address_id, user=user)
             except Address.DoesNotExist:
                 pass
+        elif shipping_address_data:
+            # Create a new address from the provided data
+            try:
+                shipping_address = Address.objects.create(
+                    user=user,
+                    first_name=shipping_address_data.get('first_name', ''),
+                    last_name=shipping_address_data.get('last_name', ''),
+                    phone=shipping_address_data.get('phone', ''),
+                    address_line1=shipping_address_data.get('address_line1', ''),
+                    city=shipping_address_data.get('city', ''),
+                    state=shipping_address_data.get('state', ''),
+                    zip_code=shipping_address_data.get('zip_code', ''),
+                    country=shipping_address_data.get('country', 'VN'),
+                    is_default=False  # Don't make it default automatically
+                )
+            except Exception as e:
+                raise serializers.ValidationError(f"Failed to create shipping address: {str(e)}")
         
         # If no items provided, use cart items
         if not items_data:
             cart_items = CartItem.objects.filter(cart__user=user)
             if not cart_items.exists():
                 raise serializers.ValidationError("No items in cart to create order")
-            items_data = [{'product_id': item.product.id, 'quantity': item.quantity} for item in cart_items]
+            items_data = [{'product_variant_id': item.product_variant.id, 'quantity': item.quantity} for item in cart_items]
         
         # Use OrderManager to create order with proper payment deadline
         try:

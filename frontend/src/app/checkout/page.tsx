@@ -167,7 +167,7 @@ export default function CheckoutPage() {
     try {
       setIsProcessing(true)
       
-      // Create order in pending state
+      // Create order in pending state from cart
       const orderData = {
         shipping_address: {
           first_name: shippingData.firstName,
@@ -181,10 +181,6 @@ export default function CheckoutPage() {
           country: shippingData.country,
         },
         shipping_method: "standard" as const,
-        items: items.map(item => ({
-          product_id: item.id,
-          quantity: item.quantity
-        }))
       }
 
       const order = await userOrdersApi.createOrderFromCart(orderData)

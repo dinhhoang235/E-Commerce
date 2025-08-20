@@ -132,13 +132,16 @@ export default function CartPage() {
                   key={item.itemId}
                   className="flex flex-col sm:flex-row items-start sm:items-center gap-4 pb-6 border-b last:border-0 last:pb-0"
                 >
-                  <div className="w-24 h-24 bg-slate-100 rounded-lg flex items-center justify-center">
+                  <div className="w-24 h-24 bg-slate-100 rounded-lg flex items-center justify-center overflow-hidden">
                     <img
-                      src={item.image || "/placeholder.svg"}
+                      src={item.image || "/placeholder.jpg"}
                       alt={item.name}
                       width={100}
                       height={100}
-                      className="object-contain"
+                      className="object-contain w-full h-full"
+                      onError={(e) => {
+                        e.currentTarget.src = "/placeholder.jpg";
+                      }}
                     />
                   </div>
                   <div className="flex-1">

@@ -257,7 +257,7 @@ export function Header() {
                   ) : (
                     <div className="space-y-4">
                       {items.map((item) => (
-                        <div key={item.id} className="flex items-center space-x-4 p-4 border rounded-lg">
+                        <div key={item.itemId} className="flex items-center space-x-4 p-4 border rounded-lg">
                           <div className="w-16 h-16 bg-slate-100 rounded-lg overflow-hidden">
                             <img 
                               src={item.image || "/placeholder.jpg"} 
@@ -270,8 +270,12 @@ export function Header() {
                           </div>
                           <div className="flex-1">
                             <h4 className="font-medium">{item.name}</h4>
-                            <p className="text-sm text-slate-500">Qty: {item.quantity}</p>
-                            <p className="font-bold">${item.price}</p>
+                            <div className="text-sm text-slate-500 space-y-1">
+                              <p>Qty: {item.quantity}</p>
+                              {item.color && <p>Color: {item.color}</p>}
+                              {item.storage && <p>Storage: {item.storage}</p>}
+                            </div>
+                            <p className="font-bold">${typeof item.price === 'number' ? (item.price * item.quantity).toFixed(2) : '0.00'}</p>
                           </div>
                         </div>
                       ))}

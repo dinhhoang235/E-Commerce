@@ -1,18 +1,50 @@
 import api from "../api"
 
+// Helper function to find product variant ID based on product, color, and storage
+export async function findProductVariantId(productId: number, color?: string, storage?: string): Promise<number | null> {
+  try {
+    // Filter by product_id to get only variants for this product
+    const response = await api.get(`/product-variants/?product_id=${productId}`)
+    const variants = response.data.results || response.data
+    
+    // Find the variant that matches the criteria
+    const variant = variants.find((v: any) => {
+      const colorMatch = !color || (v.color && v.color.name === color)
+      const storageMatch = !storage || v.storage === storage
+      
+      return colorMatch && storageMatch
+    })
+    
+    return variant ? variant.id : null
+  } catch (error) {
+    console.error('Error finding product variant:', error)
+    return null
+  }
+}
+
 export interface CartItem {
   id: number
-  product: {
+  product_variant: {
     id: number
-    name: string
+    product: {
+      id: number
+      name: string
+      price: number
+      image: string
+      colors?: string[]
+      storage?: string[]
+    }
+    color: {
+      id: number
+      name: string
+      hex_code?: string
+    }
+    storage?: string
     price: number
-    image: string
-    colors: string[]
-    storage: string[]
+    stock: number
+    is_in_stock: boolean
   }
   quantity: number
-  color?: string
-  storage?: string
   total_price: number
   created_at: string
 }
@@ -27,10 +59,8 @@ export interface Cart {
 }
 
 export interface AddToCartData {
-  product_id: number
+  product_variant_id: number
   quantity?: number
-  color?: string
-  storage?: string
 }
 
 export interface UpdateCartItemData {
@@ -64,7 +94,6 @@ class CartService {
   // Add item to cart
   async addItem(data: AddToCartData): Promise<{ message: string; item: CartItem }> {
     try {
-      console.log('Cart service sending data:', data) // Debug log
       const response = await api.post('/cart/add_item/', data)
       return response.data
     } catch (error: any) {
@@ -72,7 +101,7 @@ class CartService {
       
       // Provide more specific error messages
       if (error.response?.status === 400) {
-        const errorDetail = error.response.data?.error || error.response.data?.product_id?.[0] || error.response.data?.quantity?.[0] || 'Invalid request data'
+        const errorDetail = error.response.data?.error || error.response.data?.product_variant_id?.[0] || error.response.data?.quantity?.[0] || 'Invalid request data'
         throw new Error(errorDetail)
       } else if (error.response?.status === 401) {
         throw new Error('Please log in to add items to cart')

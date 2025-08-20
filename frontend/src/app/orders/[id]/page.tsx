@@ -167,10 +167,10 @@ export default function OrderDetailPage() {
                     order.items.map((item) => (
                       <div key={item.id} className="flex items-center space-x-4 pb-4 border-b last:border-b-0">
                         <div className="w-16 h-16 bg-slate-100 rounded-lg flex items-center justify-center overflow-hidden">
-                          {item.product_image && !imageErrors.has(item.id) ? (
+                          {item.product_variant_image && !imageErrors.has(item.id) ? (
                             <img
-                              src={item.product_image}
-                              alt={item.product_name}
+                              src={item.product_variant_image}
+                              alt={item.product_variant_name}
                               width={64}
                               height={64}
                               className="w-full h-full object-cover rounded-lg"
@@ -181,10 +181,16 @@ export default function OrderDetailPage() {
                           )}
                         </div>
                         <div className="flex-1">
-                          <h4 className="font-medium">{item.product_name}</h4>
-                          <p className="text-sm text-slate-600">
-                            Quantity: {item.quantity} × ${parseFloat(item.price).toFixed(2)}
-                          </p>
+                          <h4 className="font-medium">{item.product_variant_name}</h4>
+                          <div className="text-sm text-slate-600 space-y-1">
+                            {item.product_variant_color && (
+                              <p>Color: {item.product_variant_color}</p>
+                            )}
+                            {item.product_variant_storage && (
+                              <p>Storage: {item.product_variant_storage}</p>
+                            )}
+                            <p>Quantity: {item.quantity} × ${parseFloat(item.price).toFixed(2)}</p>
+                          </div>
                         </div>
                         <div className="text-right">
                           <p className="font-medium">

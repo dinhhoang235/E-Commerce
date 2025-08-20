@@ -2,7 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from users.models import Address
-from products.models import Product
+from products.models import ProductVariant
 
 
 class Order(models.Model):
@@ -51,7 +51,7 @@ class Order(models.Model):
     @property
     def products_list(self):
         """Get list of product names in this order"""
-        return [f"{item.product.name}" + (f" x{item.quantity}" if item.quantity > 1 else "") for item in self.items.all()]
+        return [f"{item.product_variant.product.name} ({item.product_variant.color.name if item.product_variant.color else 'No Color'}, {item.product_variant.storage or 'No Storage'})" + (f" x{item.quantity}" if item.quantity > 1 else "") for item in self.items.all()]
     
     @property
     def shipping_address_formatted(self):
@@ -98,22 +98,22 @@ class Order(models.Model):
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
-    product = models.ForeignKey(Product, on_delete=models.PROTECT)
+    product_variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT)
     quantity = models.PositiveIntegerField(default=1)
     price = models.DecimalField(max_digits=10, decimal_places=2)
 
     def __str__(self):
-        return f"{self.product.name} x {self.quantity}"
+        return f"{self.product_variant.product.name} ({self.product_variant.color.name if self.product_variant.color else 'No Color'}, {self.product_variant.storage or 'No Storage'}) x {self.quantity}"
     
     def clean(self):
         """
         Validate that there's sufficient stock for this order item.
         """
-        if self.product and self.quantity:
-            if not self.product.check_stock_availability(self.quantity):
+        if self.product_variant and self.quantity:
+            if not self.product_variant.check_stock_availability(self.quantity):
                 raise ValidationError(
-                    f"Insufficient stock for {self.product.name}. "
-                    f"Available: {self.product.stock}, Requested: {self.quantity}"
+                    f"Insufficient stock for {self.product_variant}. "
+                    f"Available: {self.product_variant.stock}, Requested: {self.quantity}"
                 )
     
     @property

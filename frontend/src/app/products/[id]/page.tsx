@@ -17,6 +17,7 @@ import { getAllProducts } from "@/lib/services/products"
 import { WriteReviewDialog } from "@/components/write-review-dialog"
 import { ReviewList } from "@/components/review-list"
 import { StarRating } from "@/components/star-rating"
+import { useToast } from "@/hooks/use-toast"
 // Define Category interface
 interface Category {
   id: string | number
@@ -73,6 +74,7 @@ export default function ProductPage() {
   const params = useParams()
   const router = useRouter()
   const { addItem } = useCart()
+  const { toast } = useToast()
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -250,11 +252,18 @@ export default function ProductPage() {
         color: selectedColor,
         storage: selectedStorage,
       })
-      // Optional: Show success message or redirect
-      alert('Item added to cart successfully!')
+      
+      toast({
+        title: "Added to Cart",
+        description: `${product.name} has been added to your cart.`,
+      })
     } catch (error) {
       console.error('Failed to add item to cart:', error)
-      alert('Failed to add item to cart. Please try again.')
+      toast({
+        title: "Error",
+        description: "Failed to add item to cart. Please try again.",
+        variant: "destructive",
+      })
     } finally {
       setAddingToCart(false)
     }

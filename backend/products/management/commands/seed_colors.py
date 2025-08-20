@@ -14,7 +14,6 @@ APPLE_COLORS = [
     ("Black Titanium", "#000000"),
     # Ipad
     ("Space Gray", "#555555"),
-    ("Starlight", "#E3D0C0"),
     ("Purple", "#8E8E93"),
     ("Blue", "#5AC8FA"),
     ("Silver", "#E5E5EA"),

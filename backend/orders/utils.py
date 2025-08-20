@@ -4,7 +4,7 @@ Order management utilities for handling stock and order operations.
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from .models import Order, OrderItem
-from products.models import Product, InsufficientStockError
+from products.models import ProductVariant, InsufficientStockError
 import uuid
 from decimal import Decimal
 
@@ -25,10 +25,10 @@ class OrderManager:
         Validate that all items in the order have sufficient stock.
         
         Args:
-            items_data: List of dicts with 'product_id', 'quantity' keys
+            items_data: List of dicts with 'product_variant_id', 'quantity' keys
             
         Returns:
-            List of validated Product objects and quantities
+            List of validated ProductVariant objects and quantities
             
         Raises:
             ValidationError: If any validation fails
@@ -38,24 +38,24 @@ class OrderManager:
         
         for item in items_data:
             try:
-                product = Product.objects.get(id=item['product_id'])
-            except Product.DoesNotExist:
-                raise ValidationError(f"Product with ID {item['product_id']} not found")
+                product_variant = ProductVariant.objects.get(id=item['product_variant_id'])
+            except ProductVariant.DoesNotExist:
+                raise ValidationError(f"Product variant with ID {item['product_variant_id']} not found")
             
             quantity = item['quantity']
             if quantity <= 0:
-                raise ValidationError(f"Quantity must be positive for {product.name}")
+                raise ValidationError(f"Quantity must be positive for {product_variant}")
             
-            if not product.check_stock_availability(quantity):
+            if not product_variant.check_stock_availability(quantity):
                 raise InsufficientStockError(
-                    f"Insufficient stock for {product.name}. "
-                    f"Available: {product.stock}, Requested: {quantity}"
+                    f"Insufficient stock for {product_variant}. "
+                    f"Available: {product_variant.stock}, Requested: {quantity}"
                 )
             
             validated_items.append({
-                'product': product,
+                'product_variant': product_variant,
                 'quantity': quantity,
-                'price': product.price
+                'price': product_variant.price
             })
         
         return validated_items
@@ -67,7 +67,7 @@ class OrderManager:
         
         Args:
             user: User creating the order
-            items_data: List of dicts with 'product_id', 'quantity' keys
+            items_data: List of dicts with 'product_variant_id', 'quantity' keys
             shipping_address: Address object (optional)
             shipping_method: Shipping method choice
             
@@ -105,7 +105,7 @@ class OrderManager:
             for item in validated_items:
                 OrderItem.objects.create(
                     order=order,
-                    product=item['product'],
+                    product_variant=item['product_variant'],
                     quantity=item['quantity'],
                     price=item['price']
                 )
@@ -135,19 +135,19 @@ class OrderManager:
         quantity_diff = new_quantity - old_quantity
         
         with transaction.atomic():
-            product = Product.objects.select_for_update().get(id=order_item.product.id)
+            product_variant = ProductVariant.objects.select_for_update().get(id=order_item.product_variant.id)
             
             if quantity_diff > 0:
                 # Increasing quantity - check stock availability
-                if not product.check_stock_availability(quantity_diff):
+                if not product_variant.check_stock_availability(quantity_diff):
                     raise InsufficientStockError(
-                        f"Insufficient stock for {product.name}. "
-                        f"Available: {product.stock}, Additional needed: {quantity_diff}"
+                        f"Insufficient stock for {product_variant}. "
+                        f"Available: {product_variant.stock}, Additional needed: {quantity_diff}"
                     )
-                product.reduce_stock(quantity_diff)
+                product_variant.reduce_stock(quantity_diff)
             elif quantity_diff < 0:
                 # Decreasing quantity - restore stock
-                product.increase_stock(abs(quantity_diff))
+                product_variant.increase_stock(abs(quantity_diff))
             
             # Update order item
             order_item.quantity = new_quantity
@@ -238,24 +238,24 @@ class OrderManager:
         return True
     
     @staticmethod
-    def get_low_stock_products(threshold=10):
+    def get_low_stock_variants(threshold=10):
         """
-        Get products with stock below the threshold.
+        Get product variants with stock below the threshold.
         
         Args:
             threshold: Stock threshold
             
         Returns:
-            QuerySet: Products with low stock
+            QuerySet: Product variants with low stock
         """
-        return Product.objects.filter(stock__lt=threshold, is_in_stock=True)
+        return ProductVariant.objects.filter(stock__lt=threshold, is_in_stock=True)
     
     @staticmethod
-    def get_out_of_stock_products():
+    def get_out_of_stock_variants():
         """
-        Get products that are out of stock.
+        Get product variants that are out of stock.
         
         Returns:
-            QuerySet: Out of stock products
+            QuerySet: Out of stock product variants
         """
-        return Product.objects.filter(stock=0, is_in_stock=False)
+        return ProductVariant.objects.filter(stock=0, is_in_stock=False)

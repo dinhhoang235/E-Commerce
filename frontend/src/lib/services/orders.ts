@@ -3,10 +3,12 @@ import api from "@/lib/api"
 // Types based on the backend models and serializers
 export interface OrderItem {
   id: number
-  product: number
-  product_name: string
-  product_price: string
-  product_image?: string
+  product_variant: number
+  product_variant_name: string
+  product_variant_color: string
+  product_variant_storage: string
+  product_variant_price: string
+  product_variant_image?: string
   quantity: number
   price: string
 }
@@ -34,9 +36,19 @@ export interface Order {
 
 export interface OrderCreateData {
   shipping_address_id?: number
+  shipping_address?: {
+    first_name: string
+    last_name: string
+    phone: string
+    address_line1: string
+    city: string
+    state: string
+    zip_code: string
+    country: string
+  }
   shipping_method?: "standard" | "express" | "overnight"
   items?: Array<{
-    product_id: number
+    product_variant_id: number
     quantity: number
   }>
 }

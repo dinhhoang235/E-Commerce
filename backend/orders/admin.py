@@ -5,7 +5,7 @@ from .models import Order, OrderItem
 class OrderItemInline(admin.TabularInline):
     model = OrderItem
     extra = 0
-    readonly_fields = ['product', 'quantity', 'price']
+    readonly_fields = ['product_variant', 'quantity', 'price']
     can_delete = False
 
 
@@ -43,10 +43,10 @@ class OrderAdmin(admin.ModelAdmin):
 
 @admin.register(OrderItem)
 class OrderItemAdmin(admin.ModelAdmin):
-    list_display = ['order', 'product', 'quantity', 'price']
+    list_display = ['order', 'product_variant', 'quantity', 'price']
     list_filter = ['order__status', 'order__date']
-    search_fields = ['order__id', 'product__name']
-    readonly_fields = ['order', 'product', 'quantity', 'price']
+    search_fields = ['order__id', 'product_variant__product__name']
+    readonly_fields = ['order', 'product_variant', 'quantity', 'price']
     
     def has_add_permission(self, request):
         return False

@@ -75,6 +75,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
     color = ProductColorSerializer(read_only=True)
     color_id = serializers.PrimaryKeyRelatedField(queryset=ProductColor.objects.all(), source='color', write_only=True)
     total_stock = serializers.SerializerMethodField()
+    product = serializers.SerializerMethodField()
     
     class Meta:
         model = ProductVariant
@@ -82,6 +83,25 @@ class ProductVariantSerializer(serializers.ModelSerializer):
     
     def get_total_stock(self, obj):
         return obj.stock
+    
+    def get_product(self, obj):
+        from .mixins import ImageHandlingMixin
+        
+        # Create a simple product representation with image URL
+        request = self.context.get('request')
+        image_url = None
+        if obj.product.image:
+            if request:
+                image_url = request.build_absolute_uri(obj.product.image.url)
+            else:
+                image_url = obj.product.image.url
+        
+        return {
+            'id': obj.product.id,
+            'name': obj.product.name,
+            'image': image_url,
+            'description': obj.product.description,
+        }
 
     def validate(self, data):
         # Check for duplicate variant when creating

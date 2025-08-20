@@ -3,7 +3,7 @@ from products.models import Product, ProductVariant, ProductColor
 
 VARIANTS_DATA = [
     {
-        "product_name": "iPhone 15 Pro Max",
+        "product_name": "Iphone 15 Pro Max",
         "variants": [
             {"color": "Natural Titanium", "storage": "256GB", "price": 1299, "stock": 20},
             {"color": "Natural Titanium", "storage": "512GB", "price": 1399, "stock": 30},
@@ -17,7 +17,7 @@ VARIANTS_DATA = [
         ]
     },
     {
-        "product_name": "iPhone 15 Pro",
+        "product_name": "Iphone 15 Pro",
         "variants": [
             {"color": "Natural Titanium", "storage": "256GB", "price": 1099, "stock": 50},
             {"color": "Natural Titanium", "storage": "512GB", "price": 1199, "stock": 20},
@@ -29,8 +29,9 @@ VARIANTS_DATA = [
             {"color": "Black Titanium", "storage": "512GB", "price": 1199, "stock": 20},
             {"color": "Black Titanium", "storage": "1TB", "price": 1299, "stock": 30},
         ]
-    },{
-        "product_name": "iPhone 15",
+    },
+    {
+        "product_name": "Iphone 15 ",
         "variants": [
             {"color": "Black", "storage": "128GB", "price": 799, "stock": 20},
             {"color": "Black", "storage": "256GB", "price": 899, "stock": 30},
@@ -89,20 +90,6 @@ VARIANTS_DATA = [
             {"color": "Silver", "storage": "512GB", "price": 899, "stock": 10},
         ]
     },
-    {
-        "product_name": "Ipad Pro 12.9 M2",
-        "variants": [
-            {"color": "Space Gray", "storage": "256GB", "price": 1099, "stock": 20},
-            {"color": "Space Gray", "storage": "512GB", "price": 1199, "stock": 30},
-            {"color": "Space Gray", "storage": "1TB", "price": 1299, "stock": 30},
-            {"color": "Starlight", "storage": "256GB", "price": 1099, "stock": 40},
-            {"color": "Starlight", "storage": "512GB", "price": 1199, "stock": 50},
-            {"color": "Starlight", "storage": "1TB", "price": 1299, "stock": 60},
-            {"color": "Silver", "storage": "256GB", "price": 1099, "stock": 40},
-            {"color": "Silver", "storage": "512GB", "price": 1199, "stock": 20},
-            {"color": "Silver", "storage": "1TB", "price": 1299, "stock": 10},
-        ]
-    },
     # MacBook
     {
         "product_name": "MacBook Pro 14 M3",
@@ -114,7 +101,8 @@ VARIANTS_DATA = [
             {"color": "Silver", "storage": "1TB", "price": 2099, "stock": 20},
             {"color": "Silver", "storage": "2TB", "price": 2199, "stock": 10},
         ]
-    },{
+    },
+    {
         "product_name": "MacBook Air 13 M2",
         "variants": [
             {"color": "Midnight", "storage": "256GB", "price": 999, "stock": 20},

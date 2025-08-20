@@ -10,7 +10,7 @@ from .serializers import (
     AddToCartSerializer, 
     UpdateCartItemSerializer
 )
-from products.models import Product
+from products.models import ProductVariant
 
 
 class CartViewSet(viewsets.ViewSet):
@@ -28,29 +28,38 @@ class CartViewSet(viewsets.ViewSet):
         serializer = AddToCartSerializer(data=request.data)
         if serializer.is_valid():
             cart, created = Cart.objects.get_or_create(user=request.user)
-            product = get_object_or_404(Product, id=serializer.validated_data['product_id'])
+            product_variant = get_object_or_404(ProductVariant, id=serializer.validated_data['product_variant_id'])
             
-            # Check if item with same product and options already exists
+            # Check if item with same product variant already exists
             existing_item = CartItem.objects.filter(
                 cart=cart,
-                product=product,
-                color=serializer.validated_data.get('color', ''),
-                storage=serializer.validated_data.get('storage', '')
+                product_variant=product_variant
             ).first()
 
             if existing_item:
                 # Update existing item quantity
-                existing_item.quantity += serializer.validated_data['quantity']
+                new_quantity = existing_item.quantity + serializer.validated_data['quantity']
+                
+                # Check stock availability for new quantity
+                if not product_variant.check_stock_availability(new_quantity):
+                    return Response(
+                        {
+                            'error': f'Insufficient stock for {product_variant}. '
+                                   f'Available: {product_variant.stock}, '
+                                   f'Requested: {new_quantity}'
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                existing_item.quantity = new_quantity
                 existing_item.save()
                 item_serializer = CartItemSerializer(existing_item, context={'request': request})
             else:
                 # Create new cart item
                 cart_item = CartItem.objects.create(
                     cart=cart,
-                    product=product,
-                    quantity=serializer.validated_data['quantity'],
-                    color=serializer.validated_data.get('color', ''),
-                    storage=serializer.validated_data.get('storage', '')
+                    product_variant=product_variant,
+                    quantity=serializer.validated_data['quantity']
                 )
                 item_serializer = CartItemSerializer(cart_item, context={'request': request})
 
@@ -78,7 +87,20 @@ class CartViewSet(viewsets.ViewSet):
         
         serializer = UpdateCartItemSerializer(data=request.data)
         if serializer.is_valid():
-            cart_item.quantity = serializer.validated_data['quantity']
+            new_quantity = serializer.validated_data['quantity']
+            
+            # Check stock availability for new quantity
+            if not cart_item.product_variant.check_stock_availability(new_quantity):
+                return Response(
+                    {
+                        'error': f'Insufficient stock for {cart_item.product_variant}. '
+                               f'Available: {cart_item.product_variant.stock}, '
+                               f'Requested: {new_quantity}'
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            cart_item.quantity = new_quantity
             cart_item.save()
             
             item_serializer = CartItemSerializer(cart_item, context={'request': request})

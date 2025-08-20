@@ -1,24 +1,25 @@
 from rest_framework import serializers
 from .models import Cart, CartItem
-from products.serializers import ProductSerializer
+from products.serializers import ProductVariantSerializer
+from products.models import ProductVariant
 
 
 class CartItemSerializer(serializers.ModelSerializer):
-    product = ProductSerializer(read_only=True)
-    product_id = serializers.IntegerField(write_only=True)
+    product_variant = ProductVariantSerializer(read_only=True)
+    product_variant_id = serializers.IntegerField(write_only=True)
     total_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
     class Meta:
         model = CartItem
-        fields = ['id', 'product', 'product_id', 'quantity', 'color', 'storage', 'total_price', 'created_at']
+        fields = ['id', 'product_variant', 'product_variant_id', 'quantity', 'total_price', 'created_at']
 
     def to_representation(self, instance):
         # Get the standard representation
         representation = super().to_representation(instance)
-        # Pass request context to nested ProductSerializer
+        # Pass request context to nested ProductVariantSerializer
         if self.context.get('request'):
-            product_serializer = ProductSerializer(instance.product, context=self.context)
-            representation['product'] = product_serializer.data
+            variant_serializer = ProductVariantSerializer(instance.product_variant, context=self.context)
+            representation['product_variant'] = variant_serializer.data
         return representation
 
     def validate_quantity(self, value):
@@ -27,26 +28,18 @@ class CartItemSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, data):
-        # Get product to validate color and storage
+        # Get product variant to validate stock availability
         try:
-            from products.models import Product
-            product = Product.objects.get(id=data['product_id'])
-        except Product.DoesNotExist:
-            raise serializers.ValidationError("Product does not exist")
+            product_variant = ProductVariant.objects.get(id=data['product_variant_id'])
+        except ProductVariant.DoesNotExist:
+            raise serializers.ValidationError("Product variant does not exist")
 
-        # Validate color if provided
-        if 'color' in data and data['color']:
-            if data['color'] not in product.colors:
-                raise serializers.ValidationError(
-                    f"Color '{data['color']}' is not available for this product"
-                )
-
-        # Validate storage if provided
-        if 'storage' in data and data['storage']:
-            if data['storage'] not in product.storage:
-                raise serializers.ValidationError(
-                    f"Storage '{data['storage']}' is not available for this product"
-                )
+        # Validate stock availability
+        if not product_variant.check_stock_availability(data['quantity']):
+            raise serializers.ValidationError(
+                f"Insufficient stock for {product_variant}. "
+                f"Available: {product_variant.stock}, Requested: {data['quantity']}"
+            )
 
         return data
 
@@ -62,22 +55,19 @@ class CartSerializer(serializers.ModelSerializer):
 
 
 class AddToCartSerializer(serializers.Serializer):
-    product_id = serializers.IntegerField()
+    product_variant_id = serializers.IntegerField()
     quantity = serializers.IntegerField(default=1)
-    color = serializers.CharField(required=False, allow_blank=True)
-    storage = serializers.CharField(required=False, allow_blank=True)
 
     def validate_quantity(self, value):
         if value <= 0:
             raise serializers.ValidationError("Quantity must be greater than 0")
         return value
 
-    def validate_product_id(self, value):
-        from products.models import Product
+    def validate_product_variant_id(self, value):
         try:
-            Product.objects.get(id=value)
-        except Product.DoesNotExist:
-            raise serializers.ValidationError("Product does not exist")
+            ProductVariant.objects.get(id=value)
+        except ProductVariant.DoesNotExist:
+            raise serializers.ValidationError("Product variant does not exist")
         return value
 
 
