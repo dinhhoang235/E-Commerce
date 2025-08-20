@@ -15,14 +15,11 @@ APPLE_COLORS = [
     # Ipad
     ("Space Gray", "#555555"),
     ("Purple", "#8E8E93"),
-    ("Blue", "#5AC8FA"),
-    ("Silver", "#E5E5EA"),
     # Macbook
     ("Space Black", "#1C1C1E"),
     ("Midnight", "#1E1F2B"),
     ("Starlight", "#E3D0C0"),
     ("Silver", "#F5F5F0"),
-    ("Space Gray", "#8E8E93"),
 ]
 
 class Command(BaseCommand):

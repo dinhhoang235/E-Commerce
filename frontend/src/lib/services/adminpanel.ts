@@ -77,14 +77,45 @@ export const adminPanelApi = {
     const response = await api.get(`/orders/admin/?limit=${limit}`)
     
     // Transform the backend data to match frontend interface
-    return response.data.results?.map((order: any) => ({
-      id: order.id,
-      customer: order.customer_name || `${order.user?.first_name || ''} ${order.user?.last_name || ''}`.trim() || order.user?.username || 'Unknown',
-      product: order.items?.[0]?.product_name || 'Multiple items',
-      amount: `$${parseFloat(order.total).toFixed(2)}`,
-      status: order.status,
-      date: new Date(order.date).toISOString().split('T')[0]
-    })) || []
+    return response.data.results?.map((order: any) => {
+      // Improved customer name fallback logic
+      let customerName = 'Unknown';
+      
+      // Try to use the customer field from backend (which uses improved customer_name property)
+      if (order.customer && order.customer.trim()) {
+        customerName = order.customer;
+      }
+      // Fallback to user data if available
+      else if (order.user) {
+        const user = order.user;
+        
+        // Try account first_name and last_name
+        if (user.account?.first_name || user.account?.last_name) {
+          customerName = `${user.account.first_name || ''} ${user.account.last_name || ''}`.trim();
+        }
+        // Try user first_name and last_name
+        else if (user.first_name || user.last_name) {
+          customerName = `${user.first_name || ''} ${user.last_name || ''}`.trim();
+        }
+        // Try username
+        else if (user.username) {
+          customerName = user.username;
+        }
+        // Try email as last resort
+        else if (user.email) {
+          customerName = user.email;
+        }
+      }
+
+      return {
+        id: order.id,
+        customer: customerName,
+        product: order.products?.[0] || order.items?.[0]?.product_variant_name || 'Multiple items',
+        amount: `$${parseFloat(order.total).toFixed(2)}`,
+        status: order.status,
+        date: new Date(order.date).toISOString().split('T')[0]
+      };
+    }) || []
   },
 
   // Get order statistics

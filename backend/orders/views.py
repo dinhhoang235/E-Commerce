@@ -87,10 +87,10 @@ class AdminOrderListView(generics.ListAPIView):
     """
     serializer_class = AdminOrderSerializer
     permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
-    queryset = Order.objects.all().order_by('-date')
     
     def get_queryset(self):
-        queryset = super().get_queryset()
+        # Use select_related to avoid N+1 queries for user data
+        queryset = Order.objects.select_related('user', 'user__account').order_by('-date')
         
         # Add filtering options
         status_filter = self.request.query_params.get('status', None)

@@ -36,12 +36,27 @@ class Order(models.Model):
     
     @property
     def customer_name(self):
-        """Get customer full name"""
+        """Get customer full name with improved fallback logic"""
+        # Try to get from Account model first
         if hasattr(self.user, 'account'):
             account = self.user.account
             if account.first_name and account.last_name:
                 return f"{account.first_name} {account.last_name}"
-        return f"{self.user.first_name} {self.user.last_name}" if self.user.first_name else self.user.username
+            elif account.first_name:
+                return account.first_name
+            elif account.last_name:
+                return account.last_name
+        
+        # Fallback to Django User model
+        if self.user.first_name and self.user.last_name:
+            return f"{self.user.first_name} {self.user.last_name}"
+        elif self.user.first_name:
+            return self.user.first_name
+        elif self.user.last_name:
+            return self.user.last_name
+        
+        # Final fallback to username or email
+        return self.user.username or self.user.email or f"User {self.user.id}"
     
     @property
     def customer_email(self):

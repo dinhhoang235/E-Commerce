@@ -19,6 +19,7 @@ import { Search, Eye, Package, Truck, CheckCircle } from "lucide-react"
 import { adminOrdersApi, type Order, type OrderStats } from "@/lib/services/orders"
 import { useToast } from "@/hooks/use-toast"
 import { PaymentStatusBadge } from "@/components/ui/payment-status-badge"
+import Link from "next/link"
 
 export default function AdminOrdersPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -301,7 +302,14 @@ export default function AdminOrdersPage() {
             <TableBody>
               {filteredOrders.map((order) => (
                 <TableRow key={order.id}>
-                  <TableCell className="font-medium">{order.id}</TableCell>
+                  <TableCell className="font-medium">
+                    <Link 
+                      href={`/admin/orders/${order.id}`}
+                      className="text-blue-600 hover:text-blue-800 hover:underline"
+                    >
+                      {order.id}
+                    </Link>
+                  </TableCell>
                   <TableCell>
                     <div>
                       <p className="font-medium">{order.customer}</p>
@@ -309,12 +317,42 @@ export default function AdminOrdersPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="space-y-1">
-                      {order.products.map((product, index) => (
-                        <p key={index} className="text-sm">
-                          {product}
-                        </p>
-                      ))}
+                    <div className="space-y-2">
+                      {order.items && order.items.length > 0 ? (
+                        order.items.map((item, index) => (
+                          <div key={index} className="flex items-center space-x-2">
+                            {item.product_variant_image && (
+                              <img 
+                                src={item.product_variant_image}
+                                alt={item.product_variant_name}
+                                className="w-8 h-8 object-cover rounded border"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement
+                                  target.style.display = 'none'
+                                }}
+                              />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{item.product_variant_name}</p>
+                              <div className="flex items-center space-x-2 text-xs text-slate-600">
+                                {item.product_variant_color && (
+                                  <span className="bg-slate-100 px-1 rounded">{item.product_variant_color}</span>
+                                )}
+                                {item.product_variant_storage && (
+                                  <span className="bg-slate-100 px-1 rounded">{item.product_variant_storage}</span>
+                                )}
+                                <span className="font-medium">×{item.quantity}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        order.products.map((product, index) => (
+                          <p key={index} className="text-sm">
+                            {product}
+                          </p>
+                        ))
+                      )}
                     </div>
                   </TableCell>
                   <TableCell className="font-medium">${parseFloat(order.total).toFixed(2)}</TableCell>

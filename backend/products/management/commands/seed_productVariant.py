@@ -31,7 +31,7 @@ VARIANTS_DATA = [
         ]
     },
     {
-        "product_name": "Iphone 15 ",
+        "product_name": "Iphone 15",
         "variants": [
             {"color": "Black", "storage": "128GB", "price": 799, "stock": 20},
             {"color": "Black", "storage": "256GB", "price": 899, "stock": 30},

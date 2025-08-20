@@ -8,7 +8,7 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 from decimal import Decimal
 from orders.models import Order, OrderItem
-from products.models import Product
+from products.models import Product, ProductVariant
 from users.models import Account
 from payments.models import PaymentTransaction
 from .models import StoreSettings
@@ -141,13 +141,13 @@ class TopProductsView(APIView):
     permission_classes = [permissions.IsAdminUser]
     
     def get(self, request):
-        """Get top performing products"""
+        """Get top performing products using product variants"""
         from django.db.models import F
         
-        # Get products with their sales data
+        # Get products with their sales data through variants
         top_products = Product.objects.annotate(
-            total_sales=Count('orderitem', filter=Q(orderitem__order__status__in=['completed', 'shipped'])),
-            total_revenue=Sum(F('orderitem__price') * F('orderitem__quantity'), filter=Q(orderitem__order__status__in=['completed', 'shipped'])),
+            total_sales=Count('variants__orderitem', filter=Q(variants__orderitem__order__status__in=['completed', 'shipped'])),
+            total_revenue=Sum(F('variants__orderitem__price') * F('variants__orderitem__quantity'), filter=Q(variants__orderitem__order__status__in=['completed', 'shipped'])),
             total_views=Count('id')  # You can implement actual view tracking
         ).filter(
             total_sales__gt=0
@@ -440,9 +440,9 @@ class ProductStatsView(APIView):
             # Get the product
             product = Product.objects.get(id=product_id)
             
-            # Get sales data for this product
+            # Get sales data for this product through variants
             total_sales = OrderItem.objects.filter(
-                product=product,
+                product_variant__product=product,
                 order__status__in=['completed', 'shipped']
             ).aggregate(
                 total_quantity=Sum('quantity'),

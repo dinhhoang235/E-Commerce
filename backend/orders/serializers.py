@@ -14,12 +14,21 @@ class OrderItemSerializer(serializers.ModelSerializer):
     product_variant_color = serializers.CharField(source='product_variant.color.name', read_only=True)
     product_variant_storage = serializers.CharField(source='product_variant.storage', read_only=True)
     product_variant_price = serializers.DecimalField(source='product_variant.price', max_digits=10, decimal_places=2, read_only=True)
-    product_variant_image = serializers.ImageField(source='product_variant.product.image', read_only=True)
+    product_variant_image = serializers.SerializerMethodField()
     
     class Meta:
         model = OrderItem
         fields = ['id', 'product_variant', 'product_variant_name', 'product_variant_color', 'product_variant_storage', 'quantity', 'price', 'product_variant_price', 'product_variant_image']
         read_only_fields = ['id', 'product_variant_name', 'product_variant_color', 'product_variant_storage', 'product_variant_price', 'product_variant_image']
+    
+    def get_product_variant_image(self, obj):
+        """Return absolute URL for product image"""
+        if obj.product_variant.product.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.product_variant.product.image.url)
+            return obj.product_variant.product.image.url
+        return None
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -67,17 +76,41 @@ class OrderSerializer(serializers.ModelSerializer):
 
 class AdminOrderSerializer(serializers.ModelSerializer):
     """Serializer for admin order listing - matches your required format exactly"""
+    items = OrderItemSerializer(many=True, read_only=True)
     customer = serializers.CharField(source='customer_name', read_only=True)
     email = serializers.CharField(source='customer_email', read_only=True)
     products = serializers.ListField(source='products_list', read_only=True)
     date = serializers.DateTimeField(format='%Y-%m-%d', read_only=True)
     shipping = serializers.SerializerMethodField()
     payment_status = serializers.SerializerMethodField()
+    user = serializers.SerializerMethodField()  # Add user info for frontend fallback
     
     class Meta:
         model = Order
-        fields = ['id', 'customer', 'email', 'products', 'total', 'status', 'date', 'shipping', 'is_paid', 'payment_status']
-        read_only_fields = ['id', 'customer', 'email', 'products', 'date', 'shipping', 'is_paid', 'payment_status']
+        fields = ['id', 'customer', 'email', 'products', 'total', 'status', 'date', 'shipping', 'items', 'is_paid', 'payment_status', 'user']
+        read_only_fields = ['id', 'customer', 'email', 'products', 'date', 'shipping', 'items', 'is_paid', 'payment_status', 'user']
+    
+    def get_user(self, obj):
+        """Get user information for frontend fallback"""
+        try:
+            user_data = {
+                'id': obj.user.id,
+                'username': obj.user.username,
+                'first_name': obj.user.first_name,
+                'last_name': obj.user.last_name,
+                'email': obj.user.email,
+            }
+            
+            # Add account info if available
+            if hasattr(obj.user, 'account'):
+                user_data['account'] = {
+                    'first_name': obj.user.account.first_name,
+                    'last_name': obj.user.account.last_name,
+                }
+            
+            return user_data
+        except Exception:
+            return None
     
     def get_shipping(self, obj):
         return {
