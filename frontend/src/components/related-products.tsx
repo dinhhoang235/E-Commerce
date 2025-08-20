@@ -7,7 +7,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Star, ShoppingCart } from "lucide-react"
-import { useCart } from "@/components/cart-provider"
 import { getAllProducts } from "@/lib/services/products"
 import { StarRating } from "@/components/star-rating"
 
@@ -26,13 +25,14 @@ interface Product {
   id: string | number
   name: string
   description: string
-  price: number
-  originalPrice?: number
+  min_price: number
+  max_price: number
   image?: string
   category: string | Category
   rating: number
   reviews: number
   badge?: string
+  total_stock?: number
 }
 
 interface RelatedProductsProps {
@@ -43,7 +43,13 @@ interface RelatedProductsProps {
 export function RelatedProducts({ currentProductId, category }: RelatedProductsProps) {
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const { addItem } = useCart()
+
+  const formatPrice = (product: Product) => {
+    if (product.min_price === product.max_price) {
+      return `$${product.min_price}`
+    }
+    return `$${product.min_price} - $${product.max_price}`
+  }
 
   useEffect(() => {
     const fetchRelatedProducts = async () => {
@@ -129,27 +135,17 @@ export function RelatedProducts({ currentProductId, category }: RelatedProductsP
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1">
-                    <span className="font-bold">${product.price}</span>
-                    {product.originalPrice && (
-                      <span className="text-xs text-slate-500 line-through">${product.originalPrice}</span>
-                    )}
+                    <span className="font-bold">{formatPrice(product)}</span>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="p-1 h-8 w-8"
-                    onClick={() =>
-                      addItem({
-                        id: parseInt(String(product.id)) || 0,
-                        productId: parseInt(String(product.id)) || 0,
-                        name: product.name,
-                        price: product.price,
-                        image: product.image || "/placeholder.svg",
-                      })
-                    }
-                  >
-                    <ShoppingCart className="h-4 w-4" />
-                  </Button>
+                  <Link href={`/products/${product.id}`}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="p-1 h-8 w-8"
+                    >
+                      <ShoppingCart className="h-4 w-4" />
+                    </Button>
+                  </Link>
                 </div>
               </div>
             </CardContent>

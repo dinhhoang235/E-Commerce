@@ -19,13 +19,14 @@ interface Product {
   id: string | number
   name: string
   description: string
-  price: number
-  originalPrice?: number
+  min_price: number
+  max_price: number
   image?: string
   category: string | Category
   rating: number
   reviews: number
   badge?: string
+  total_stock?: number
 }
 
 interface ProductRecommendationsProps {

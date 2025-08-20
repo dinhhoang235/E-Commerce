@@ -6,7 +6,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ShoppingCart } from "lucide-react"
-import { useCart } from "@/components/cart-provider"
 import { StarRating } from "@/components/star-rating"
 
 // Define Category interface
@@ -24,13 +23,14 @@ interface Product {
   id: string | number
   name: string
   description: string
-  price: number
-  originalPrice?: number
+  min_price: number
+  max_price: number
   image?: string
   category: string | Category
   rating: number
   reviews: number
   badge?: string
+  total_stock?: number
 }
 
 interface ProductCardProps {
@@ -39,7 +39,12 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, className = "" }: ProductCardProps) {
-  const { addItem } = useCart()
+  const formatPrice = (product: Product) => {
+    if (product.min_price === product.max_price) {
+      return `$${product.min_price}`
+    }
+    return `$${product.min_price} - $${product.max_price}`
+  }
 
   return (
     <Card className={`group hover:shadow-xl transition-all duration-300 ${className}`}>
@@ -68,27 +73,17 @@ export function ProductCard({ product, className = "" }: ProductCardProps) {
           </div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
-              <span className="font-bold text-sm">${product.price}</span>
-              {product.originalPrice && (
-                <span className="text-xs text-slate-500 line-through">${product.originalPrice}</span>
-              )}
+              <span className="font-bold text-sm">{formatPrice(product)}</span>
             </div>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="p-1 h-8 w-8"
-              onClick={() =>
-                addItem({
-                  id: parseInt(String(product.id)) || 0,
-                  productId: parseInt(String(product.id)) || 0,
-                  name: product.name,
-                  price: product.price,
-                  image: product.image || "/placeholder.svg",
-                })
-              }
-            >
-              <ShoppingCart className="h-4 w-4" />
-            </Button>
+            <Link href={`/products/${product.id}`}>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="p-1 h-8 w-8"
+              >
+                <ShoppingCart className="h-4 w-4" />
+              </Button>
+            </Link>
           </div>
         </div>
       </CardContent>

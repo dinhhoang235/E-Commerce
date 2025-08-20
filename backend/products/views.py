@@ -201,7 +201,11 @@ class ProductViewSet(viewsets.ModelViewSet):
         """Get all variants for a specific product"""
         try:
             product = self.get_object()
-            variants = product.variants.select_related('color').all()
+            variants = (
+                product.variants
+                .select_related('color')
+                .order_by('color__name', 'storage', '-created_at')
+            )
             serializer = ProductVariantSerializer(variants, many=True, context={'request': request})
             return Response(serializer.data)
         except Product.DoesNotExist:
@@ -225,6 +229,9 @@ class ProductViewSet(viewsets.ModelViewSet):
         # Only include products that have variants in stock
         queryset = queryset.filter(variants__is_in_stock=True).distinct()
         
+        # Order by rating and created_at for better recommendations
+        queryset = queryset.order_by('-rating', '-created_at')
+        
         # Limit to 8 recommendations
         queryset = queryset[:8]
         serializer = ProductRecommendationSerializer(queryset, many=True, context={'request': request})
@@ -238,10 +245,11 @@ class ProductViewSet(viewsets.ModelViewSet):
         # Try to get products with highest sales in the last 7 days
         top_products = (
             Product.objects
-            .filter(orderitem__order__date__gte=last_7_days)
+            .filter(variants__orderitem__order__date__gte=last_7_days)
             .prefetch_related('variants__color')
             .annotate(total_sold=Sum('variants__sold'))
-            .order_by('-total_sold')[:10]
+            .order_by('-total_sold')
+            .distinct()[:10]
         )
 
         # If no products found in last 7 days, get all-time top sellers
@@ -263,8 +271,14 @@ class ProductViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def new_arrivals(self, request):
-        """Latest products"""
-        products = Product.objects.prefetch_related('variants__color').order_by('-created_at')[:10]
+        """Latest products with available variants"""
+        products = (
+            Product.objects
+            .filter(variants__is_in_stock=True)
+            .prefetch_related('variants__color')
+            .distinct()
+            .order_by('-created_at')[:10]
+        )
         serializer = ProductRecommendationSerializer(products, many=True, context={'request': request})
         return Response(serializer.data)
 
@@ -275,10 +289,16 @@ class ProductViewSet(viewsets.ModelViewSet):
         queryset = Product.objects.prefetch_related('variants__color').all()
 
         if category_ids:
-            queryset = queryset.filter(category__id__in=category_ids)
+            try:
+                # Convert to integers and filter
+                category_ids = [int(cat_id) for cat_id in category_ids if cat_id.isdigit()]
+                queryset = queryset.filter(category__id__in=category_ids)
+            except ValueError:
+                # If invalid category IDs, return empty queryset
+                queryset = queryset.none()
 
         # Only include products that have variants in stock
-        queryset = queryset.filter(variants__is_in_stock=True).distinct().order_by('-created_at')[:10]
+        queryset = queryset.filter(variants__is_in_stock=True).distinct().order_by('-rating', '-created_at')[:10]
         serializer = ProductRecommendationSerializer(queryset, many=True, context={'request': request})
         return Response(serializer.data)
 
@@ -300,6 +320,9 @@ class ProductViewSet(viewsets.ModelViewSet):
             except Category.DoesNotExist:
                 queryset = queryset.none()
         
+        # Only include products that have variants
+        queryset = queryset.filter(variants__isnull=False).distinct()
+        
         # Get price range from variants
         price_range = ProductVariant.objects.filter(
             product__in=queryset
@@ -308,12 +331,12 @@ class ProductViewSet(viewsets.ModelViewSet):
             max_price=Max('price')
         )
         
-        # Get available colors
+        # Get available colors from variants that belong to filtered products
         colors = ProductColor.objects.filter(
             variants__product__in=queryset
         ).distinct().values('id', 'name', 'hex_code')
         
-        # Get available storage options
+        # Get available storage options from variants that belong to filtered products
         storages = ProductVariant.objects.filter(
             product__in=queryset
         ).values_list('storage', flat=True).distinct()

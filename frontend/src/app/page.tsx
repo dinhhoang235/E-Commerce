@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ShoppingCart, Star, Truck, Shield, Headphones, Loader2 } from "lucide-react"
-import { useCart } from "@/components/cart-provider"
 import { getAllProducts, getTopSellers, getNewArrivals, getPersonalizedRecommendations } from "@/lib/services/products"
 import { getAllCategories } from "@/lib/services/categories"
 import { StarRating } from "@/components/star-rating"
@@ -26,17 +25,17 @@ interface Product {
   id: string | number
   name: string
   description?: string
-  price: number
-  original_price?: number
+  min_price: number
+  max_price: number
   image?: string
   category: string | Category
   rating: number
   reviews: number
   badge?: string
+  total_stock?: number
 }
 
 export default function HomePage() {
-  const { addItem } = useCart()
   const [categories, setCategories] = useState<Category[]>([])
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([])
   const [topSellers, setTopSellers] = useState<Product[]>([])
@@ -113,24 +112,17 @@ export default function HomePage() {
     fetchData()
   }, [])
 
-  const handleAddToCart = (product: Product) => {
-    try {
-      addItem({
-        id: parseInt(String(product.id)),
-        productId: parseInt(String(product.id)),
-        name: product.name,
-        price: product.price,
-        image: product.image || "/placeholder.svg",
-      })
-    } catch (err) {
-      console.error("Error adding item to cart:", err)
-    }
-  }
-
   const formatImageUrl = (imageUrl?: string) => {
     if (!imageUrl) return "/placeholder.svg"
     if (imageUrl.startsWith("http")) return imageUrl
     return `http://localhost:8000${imageUrl}`
+  }
+
+  const formatPrice = (product: Product) => {
+    if (product.min_price === product.max_price) {
+      return `$${product.min_price}`
+    }
+    return `$${product.min_price} - $${product.max_price}`
   }
 
   if (error) {
@@ -183,10 +175,7 @@ export default function HomePage() {
                 </p>
                 {featuredProducts.length > 0 && (
                   <div className="flex items-center gap-4 text-lg">
-                    <span className="text-3xl font-bold text-blue-400">${featuredProducts[0].price}</span>
-                    {featuredProducts[0].original_price && featuredProducts[0].original_price > featuredProducts[0].price && (
-                      <span className="text-xl text-slate-500 line-through">${featuredProducts[0].original_price}</span>
-                    )}
+                    <span className="text-3xl font-bold text-blue-400">{formatPrice(featuredProducts[0])}</span>
                   </div>
                 )}
               </div>
@@ -325,18 +314,16 @@ export default function HomePage() {
                         <span className="text-sm text-slate-600 font-medium">({product.reviews || 0})</span>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-2xl font-bold text-slate-900">${product.price}</span>
-                        {product.original_price && product.original_price > product.price && (
-                          <span className="text-lg text-slate-500 line-through">${product.original_price}</span>
-                        )}
+                        <span className="text-2xl font-bold text-slate-900">{formatPrice(product)}</span>
                       </div>
-                      <Button 
-                        className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 rounded-lg transition-all duration-300 transform hover:scale-[1.02]"
-                        onClick={() => handleAddToCart(product)}
-                      >
-                        <ShoppingCart className="w-4 h-4 mr-2" />
-                        Add to Cart
-                      </Button>
+                      <Link href={`/products/${product.id}`}>
+                        <Button 
+                          className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 rounded-lg transition-all duration-300 transform hover:scale-[1.02]"
+                        >
+                          <ShoppingCart className="w-4 h-4 mr-2" />
+                          Buy Now
+                        </Button>
+                      </Link>
                     </div>
                   </CardContent>
                 </Card>
@@ -406,18 +393,16 @@ export default function HomePage() {
                         <span className="text-sm text-slate-600 font-medium">({product.reviews || 0})</span>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-2xl font-bold text-slate-900">${product.price}</span>
-                        {product.original_price && product.original_price > product.price && (
-                          <span className="text-lg text-slate-500 line-through">${product.original_price}</span>
-                        )}
+                        <span className="text-2xl font-bold text-slate-900">{formatPrice(product)}</span>
                       </div>
-                      <Button 
-                        className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-3 rounded-lg transition-all duration-300 transform hover:scale-[1.02]"
-                        onClick={() => handleAddToCart(product)}
-                      >
-                        <ShoppingCart className="w-4 h-4 mr-2" />
-                        Add to Cart
-                      </Button>
+                      <Link href={`/products/${product.id}`}>
+                        <Button 
+                          className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-3 rounded-lg transition-all duration-300 transform hover:scale-[1.02]"
+                        >
+                          <ShoppingCart className="w-4 h-4 mr-2" />
+                          Buy Now
+                        </Button>
+                      </Link>
                     </div>
                   </CardContent>
                 </Card>
@@ -487,18 +472,16 @@ export default function HomePage() {
                         <span className="text-sm text-slate-600 font-medium">({product.reviews || 0})</span>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-2xl font-bold text-slate-900">${product.price}</span>
-                        {product.original_price && product.original_price > product.price && (
-                          <span className="text-lg text-slate-500 line-through">${product.original_price}</span>
-                        )}
+                        <span className="text-2xl font-bold text-slate-900">{formatPrice(product)}</span>
                       </div>
-                      <Button 
-                        className="w-full bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white font-semibold py-3 rounded-lg transition-all duration-300 transform hover:scale-[1.02]"
-                        onClick={() => handleAddToCart(product)}
-                      >
-                        <ShoppingCart className="w-4 h-4 mr-2" />
-                        Add to Cart
-                      </Button>
+                      <Link href={`/products/${product.id}`}>
+                        <Button 
+                          className="w-full bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white font-semibold py-3 rounded-lg transition-all duration-300 transform hover:scale-[1.02]"
+                        >
+                          <ShoppingCart className="w-4 h-4 mr-2" />
+                          Buy Now
+                        </Button>
+                      </Link>
                     </div>
                   </CardContent>
                 </Card>
