@@ -204,8 +204,15 @@ export default function OrderDetailsPage() {
               <div>
                 <p className="text-sm font-medium text-slate-600">Total Amount</p>
                 <p className="text-base font-semibold flex items-center gap-2">
-                  <DollarSign className="h-4 w-4" />
-                  ${parseFloat(order.total).toFixed(2)}
+                  ${(() => {
+                    // Calculate total with shipping if not provided by backend
+                    if (order.total_with_shipping) {
+                      return parseFloat(order.total_with_shipping).toFixed(2)
+                    }
+                    const subtotal = parseFloat(order.subtotal || order.total)
+                    const shipping = order.shipping?.cost || 0
+                    return (subtotal + shipping).toFixed(2)
+                  })()}
                 </p>
               </div>
               <div>
@@ -295,7 +302,15 @@ export default function OrderDetailsPage() {
             </div>
             <div>
               <p className="text-sm font-medium text-slate-600">Payment Amount</p>
-              <p className="text-base font-semibold">${parseFloat(order.total).toFixed(2)}</p>
+              <p className="text-base font-semibold">${(() => {
+                // Calculate total with shipping if not provided by backend
+                if (order.total_with_shipping) {
+                  return parseFloat(order.total_with_shipping).toFixed(2)
+                }
+                const subtotal = parseFloat(order.subtotal || order.total)
+                const shipping = order.shipping?.cost || 0
+                return (subtotal + shipping).toFixed(2)
+              })()}</p>
             </div>
           </CardContent>
         </Card>
@@ -369,7 +384,15 @@ export default function OrderDetailsPage() {
               <Separator className="my-6" />
               <div className="flex justify-between items-center pt-4 bg-gray-50 p-4 rounded-lg">
                 <span className="text-xl font-semibold text-gray-900">Total</span>
-                <span className="text-xl font-bold text-blue-600">${parseFloat(order.total).toFixed(2)}</span>
+                <span className="text-xl font-bold text-blue-600">${(() => {
+                  // Calculate total with shipping if not provided by backend
+                  if (order.total_with_shipping) {
+                    return parseFloat(order.total_with_shipping).toFixed(2)
+                  }
+                  const subtotal = parseFloat(order.subtotal || order.total)
+                  const shipping = order.shipping?.cost || 0
+                  return (subtotal + shipping).toFixed(2)
+                })()}</span>
               </div>
             </div>
           ) : (
@@ -390,7 +413,15 @@ export default function OrderDetailsPage() {
               <Separator className="my-6" />
               <div className="flex justify-between items-center pt-4 bg-gray-50 p-4 rounded-lg">
                 <span className="text-xl font-semibold text-gray-900">Total</span>
-                <span className="text-xl font-bold text-blue-600">${parseFloat(order.total).toFixed(2)}</span>
+                <span className="text-xl font-bold text-blue-600">${(() => {
+                  // Calculate total with shipping if not provided by backend
+                  if (order.total_with_shipping) {
+                    return parseFloat(order.total_with_shipping).toFixed(2)
+                  }
+                  const subtotal = parseFloat(order.subtotal || order.total)
+                  const shipping = order.shipping?.cost || 0
+                  return (subtotal + shipping).toFixed(2)
+                })()}</span>
               </div>
             </div>
           )}

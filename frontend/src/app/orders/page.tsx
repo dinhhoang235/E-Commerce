@@ -140,7 +140,15 @@ export default function OrdersPage() {
                         <p className="text-sm text-slate-600">
                           {getItemCount(order)} item{getItemCount(order) !== 1 ? "s" : ""}
                         </p>
-                        <p className="font-bold">${parseFloat(order.total).toFixed(2)}</p>
+                        <p className="font-bold">${(() => {
+                          // Calculate total with shipping if not provided by backend
+                          if (order.total_with_shipping) {
+                            return parseFloat(order.total_with_shipping).toFixed(2)
+                          }
+                          const subtotal = parseFloat(order.subtotal || order.total)
+                          const shipping = order.shipping?.cost || 0
+                          return (subtotal + shipping).toFixed(2)
+                        })()}</p>
                       </div>
                       <div className="flex gap-2 flex-wrap">
                         <Button variant="outline" size="sm" asChild>

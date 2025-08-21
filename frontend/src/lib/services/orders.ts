@@ -16,6 +16,7 @@ export interface OrderItem {
 export interface ShippingInfo {
   address: string
   method: string
+  cost: number
 }
 
 export interface Order {
@@ -24,6 +25,9 @@ export interface Order {
   email: string
   products: string[]
   total: string
+  subtotal?: string
+  shipping_cost?: string
+  total_with_shipping?: string
   status: "pending" | "processing" | "shipped" | "completed" | "cancelled" | "delivered" | "refunded"
   date: string
   shipping: ShippingInfo

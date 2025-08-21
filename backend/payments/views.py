@@ -108,6 +108,30 @@ def create_checkout_session_from_cart(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        # Calculate shipping cost based on method
+        from orders.models import Order
+        from decimal import Decimal
+        shipping_cost = Decimal(str(Order.SHIPPING_COSTS.get(shipping_method, 0.00)))
+        
+        # Add shipping as a line item if cost > 0
+        if shipping_cost > 0:
+            shipping_display = dict(Order.SHIPPING_METHOD_CHOICES).get(shipping_method, 'Shipping')
+            line_items.append({
+                'price_data': {
+                    'currency': 'usd',
+                    'product_data': {
+                        'name': shipping_display,
+                        'description': f'{shipping_display} delivery'
+                    },
+                    'unit_amount': int(shipping_cost * 100),  # Stripe uses cents
+                    'tax_behavior': 'inclusive',
+                },
+                'quantity': 1,
+            })
+        
+        # Total amount now includes shipping
+        total_with_shipping = Decimal(str(total_amount)) + shipping_cost
+        
         # Create shipping address if provided
         shipping_address_obj = None
         if shipping_address:
@@ -153,18 +177,18 @@ def create_checkout_session_from_cart(request):
         
         # First, try to find an exact match by total amount and item count
         for pending_order in pending_orders:
-            if abs(float(pending_order.total) - float(total_amount)) < 0.01:  # Within 1 cent
+            if abs(float(pending_order.total_with_shipping) - float(total_with_shipping)) < 0.01:  # Within 1 cent
                 order_items = pending_order.items.all()
                 if len(order_items) == len(cart_items):
-                    logger.info(f"Found pending order {pending_order.id} with matching total ${pending_order.total} and {len(order_items)} items")
+                    logger.info(f"Found pending order {pending_order.id} with matching total ${pending_order.total_with_shipping} and {len(order_items)} items")
                     existing_pending_order = pending_order
                     break
         
         # If no exact match found, try the most recent pending order with similar total
         if not existing_pending_order and pending_orders.exists():
             most_recent = pending_orders.first()
-            if abs(float(most_recent.total) - float(total_amount)) < 5.0:  # Within $5
-                logger.info(f"Using most recent pending order {most_recent.id} (total: ${most_recent.total} vs cart: ${total_amount})")
+            if abs(float(most_recent.total_with_shipping) - float(total_with_shipping)) < 5.0:  # Within $5
+                logger.info(f"Using most recent pending order {most_recent.id} (total: ${most_recent.total_with_shipping} vs cart: ${total_with_shipping})")
                 existing_pending_order = most_recent
         
         if existing_pending_order:
@@ -174,8 +198,8 @@ def create_checkout_session_from_cart(request):
             logger.info(f"Using existing pending order {order_id} (created: {order.date})")
             
             # Optionally update the order total if it has changed slightly
-            if abs(float(order.total) - float(total_amount)) > 0.01:
-                logger.info(f"Updating order total from ${order.total} to ${total_amount}")
+            if abs(float(order.total_with_shipping) - float(total_with_shipping)) > 0.01:
+                logger.info(f"Updating order total from ${order.total} to ${total_amount} (shipping: ${shipping_cost})")
                 order.total = float(total_amount)
                 order.save(update_fields=['total'])
         else:
@@ -330,6 +354,8 @@ def create_checkout_session_from_cart(request):
             'order_id': order_id,  # Include order ID in metadata
             'shipping_method': shipping_method,
             'total_amount': str(total_amount),
+            'shipping_cost': str(shipping_cost),
+            'total_with_shipping': str(total_with_shipping),
         }
         
         # Add shipping address to metadata if available
@@ -362,14 +388,14 @@ def create_checkout_session_from_cart(request):
         # Create or update payment transaction with pending status
         if existing_transaction:
             existing_transaction.stripe_checkout_id = session.id
-            existing_transaction.amount = float(total_amount)
+            existing_transaction.amount = float(total_with_shipping)
             existing_transaction.save()
             logger.info(f"Updated existing payment transaction for order {order_id}")
         else:
             PaymentTransaction.objects.create(
                 order=order,
                 stripe_checkout_id=session.id,
-                amount=float(total_amount),
+                amount=float(total_with_shipping),
                 status='pending'
             )
             logger.info(f"Created new payment transaction for order {order_id}")

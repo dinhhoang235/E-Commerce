@@ -45,16 +45,20 @@ class OrderSerializer(serializers.ModelSerializer):
     payment_status = serializers.SerializerMethodField()
     has_pending_payment = serializers.BooleanField(read_only=True)
     can_continue_payment = serializers.SerializerMethodField()
+    subtotal = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    shipping_cost = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    total_with_shipping = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     
     class Meta:
         model = Order
-        fields = ['id', 'customer', 'email', 'products', 'total', 'status', 'date', 'shipping', 'items', 'is_paid', 'payment_status', 'has_pending_payment', 'can_continue_payment']
-        read_only_fields = ['id', 'customer', 'email', 'products', 'date', 'shipping', 'is_paid', 'payment_status', 'has_pending_payment', 'can_continue_payment']
+        fields = ['id', 'customer', 'email', 'products', 'total', 'subtotal', 'shipping_cost', 'total_with_shipping', 'status', 'date', 'shipping', 'items', 'is_paid', 'payment_status', 'has_pending_payment', 'can_continue_payment']
+        read_only_fields = ['id', 'customer', 'email', 'products', 'date', 'shipping', 'is_paid', 'payment_status', 'has_pending_payment', 'can_continue_payment', 'subtotal', 'shipping_cost', 'total_with_shipping']
     
     def get_shipping(self, obj):
         return {
             'address': obj.shipping_address_formatted,
-            'method': obj.shipping_method_display
+            'method': obj.shipping_method_display,
+            'cost': float(obj.shipping_cost)
         }
     
     def get_payment_status(self, obj):
@@ -118,7 +122,8 @@ class AdminOrderSerializer(serializers.ModelSerializer):
     def get_shipping(self, obj):
         return {
             'address': obj.shipping_address_formatted,
-            'method': obj.shipping_method_display
+            'method': obj.shipping_method_display,
+            'cost': float(obj.shipping_cost)
         }
     
     def get_payment_status(self, obj):
@@ -155,7 +160,8 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     def get_shipping(self, obj):
         return {
             'address': obj.shipping_address_formatted,
-            'method': obj.shipping_method_display
+            'method': obj.shipping_method_display,
+            'cost': float(obj.shipping_cost)
         }
     
     def get_payment_status(self, obj):

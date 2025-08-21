@@ -273,11 +273,15 @@ export default function OrderDetailPage() {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span>Subtotal (inc. tax)</span>
-                    <span>${parseFloat(order.total).toFixed(2)}</span>
+                    <span>${parseFloat(order.subtotal || order.total).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Shipping</span>
-                    <span className="text-green-600">Free</span>
+                    {order.shipping?.cost !== undefined && order.shipping.cost > 0 ? (
+                      <span>${order.shipping.cost.toFixed(2)}</span>
+                    ) : (
+                      <span className="text-green-600">Free</span>
+                    )}
                   </div>
                 </div>
 
@@ -285,7 +289,15 @@ export default function OrderDetailPage() {
 
                 <div className="flex justify-between font-bold">
                   <span>Total</span>
-                  <span>${parseFloat(order.total).toFixed(2)}</span>
+                  <span>${(() => {
+                    // Calculate total with shipping if not provided by backend
+                    if (order.total_with_shipping) {
+                      return parseFloat(order.total_with_shipping).toFixed(2)
+                    }
+                    const subtotal = parseFloat(order.subtotal || order.total)
+                    const shipping = order.shipping?.cost || 0
+                    return (subtotal + shipping).toFixed(2)
+                  })()}</span>
                 </div>
                 
                 <p className="text-xs text-slate-500 text-center mt-2">

@@ -38,12 +38,22 @@ export default function CheckoutPage() {
     zipCode: user?.address?.zip_code || "",
     country: user?.address?.country || "Vietnam",
   })
+  
+  const [shippingMethod, setShippingMethod] = useState("standard")
 
   const [errors, setErrors] = useState<Record<string, string>>({})
 
+  // Shipping costs
+  const shippingCosts = {
+    standard: 0,
+    express: 5,
+    overnight: 10,
+  }
+
   // Tax-inclusive pricing: displayed prices already include tax
   const subtotal = total
-  const finalTotal = total // Prices are already tax-inclusive
+  const shippingCost = shippingCosts[shippingMethod as keyof typeof shippingCosts] || 0
+  const finalTotal = total + shippingCost // Prices are already tax-inclusive, now add shipping
 
   useEffect(() => {
     if (user !== undefined) {
@@ -180,7 +190,7 @@ export default function CheckoutPage() {
           zip_code: shippingData.zipCode,
           country: shippingData.country,
         },
-        shipping_method: "standard" as const,
+        shipping_method: shippingMethod as "standard" | "express" | "overnight",
       }
 
       const order = await userOrdersApi.createOrderFromCart(orderData)
@@ -389,6 +399,35 @@ export default function CheckoutPage() {
                   </div>
                 </div>
 
+                {/* Shipping Method Selection */}
+                <div className="space-y-2">
+                  <Label htmlFor="shippingMethod">Shipping Method</Label>
+                  <Select
+                    value={shippingMethod}
+                    onValueChange={(value) => setShippingMethod(value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="standard">
+                        Standard Shipping (Free)
+                      </SelectItem>
+                      <SelectItem value="express">
+                        Express Shipping (+$5.00)
+                      </SelectItem>
+                      <SelectItem value="overnight">
+                        Overnight Shipping (+$10.00)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-slate-500">
+                    {shippingMethod === "standard" && "5-7 business days delivery"}
+                    {shippingMethod === "express" && "2-3 business days delivery"}
+                    {shippingMethod === "overnight" && "Next business day delivery"}
+                  </p>
+                </div>
+
                 <Button 
                   onClick={handleNext} 
                   className="w-full bg-blue-600 hover:bg-blue-700"
@@ -465,6 +504,36 @@ export default function CheckoutPage() {
 
                 <Separator />
 
+                {/* Shipping Method */}
+                <div>
+                  <h3 className="font-medium mb-2">Shipping Method</h3>
+                  <div className="text-sm text-slate-600 bg-slate-50 p-3 rounded-lg">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="font-medium">
+                          {shippingMethod === "standard" && "Standard Shipping"}
+                          {shippingMethod === "express" && "Express Shipping"}
+                          {shippingMethod === "overnight" && "Overnight Shipping"}
+                        </p>
+                        <p className="text-xs">
+                          {shippingMethod === "standard" && "5-7 business days delivery"}
+                          {shippingMethod === "express" && "2-3 business days delivery"}
+                          {shippingMethod === "overnight" && "Next business day delivery"}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        {shippingCost === 0 ? (
+                          <span className="text-green-600 font-medium">Free</span>
+                        ) : (
+                          <span className="font-medium">${shippingCost.toFixed(2)}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
                 {/* Order Summary */}
                 <div className="bg-slate-50 p-4 rounded-lg">
                   <div className="space-y-2 text-sm">
@@ -474,7 +543,11 @@ export default function CheckoutPage() {
                     </div>
                     <div className="flex justify-between">
                       <span>Shipping</span>
-                      <span className="text-green-600">Free</span>
+                      {shippingCost === 0 ? (
+                        <span className="text-green-600">Free</span>
+                      ) : (
+                        <span>${shippingCost.toFixed(2)}</span>
+                      )}
                     </div>
                     <Separator />
                     <div className="flex justify-between font-bold text-base">
@@ -594,7 +667,7 @@ export default function CheckoutPage() {
 
                 <DirectPaymentButton
                   shippingAddress={shippingData}
-                  shippingMethod="standard"
+                  shippingMethod={shippingMethod}
                   onPaymentStart={handlePaymentStart}
                   onPaymentError={handlePaymentError}
                   className="w-full"
@@ -738,7 +811,11 @@ export default function CheckoutPage() {
                 </div>
                 <div className="flex justify-between">
                   <span>Shipping</span>
-                  <span className="text-green-600">Free</span>
+                  {shippingCost === 0 ? (
+                    <span className="text-green-600">Free</span>
+                  ) : (
+                    <span>${shippingCost.toFixed(2)}</span>
+                  )}
                 </div>
               </div>
 

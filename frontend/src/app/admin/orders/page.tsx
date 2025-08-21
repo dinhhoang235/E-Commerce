@@ -355,7 +355,15 @@ export default function AdminOrdersPage() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="font-medium">${parseFloat(order.total).toFixed(2)}</TableCell>
+                  <TableCell className="font-medium">${(() => {
+                    // Calculate total with shipping if not provided by backend
+                    if (order.total_with_shipping) {
+                      return parseFloat(order.total_with_shipping).toFixed(2)
+                    }
+                    const subtotal = parseFloat(order.subtotal || order.total)
+                    const shipping = order.shipping?.cost || 0
+                    return (subtotal + shipping).toFixed(2)
+                  })()}</TableCell>
                   <TableCell>
                     <Badge variant={getStatusColor(order.status)} className="flex items-center gap-1 w-fit">
                       {getStatusIcon(order.status)}
@@ -428,7 +436,15 @@ export default function AdminOrdersPage() {
                             </div>
                             <div className="flex justify-between items-center pt-4 border-t">
                               <span className="font-medium">Total</span>
-                              <span className="text-xl font-bold">${parseFloat(order.total).toFixed(2)}</span>
+                              <span className="text-xl font-bold">${(() => {
+                                // Calculate total with shipping if not provided by backend
+                                if (order.total_with_shipping) {
+                                  return parseFloat(order.total_with_shipping).toFixed(2)
+                                }
+                                const subtotal = parseFloat(order.subtotal || order.total)
+                                const shipping = order.shipping?.cost || 0
+                                return (subtotal + shipping).toFixed(2)
+                              })()}</span>
                             </div>
                           </div>
                         </DialogContent>

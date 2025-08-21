@@ -21,6 +21,13 @@ class Order(models.Model):
         ('overnight', 'Overnight Shipping'),
     ]
     
+    # Shipping costs in USD
+    SHIPPING_COSTS = {
+        'standard': 0.00,
+        'express': 5.00,
+        'overnight': 10.00,
+    }
+    
     id = models.CharField(max_length=20, primary_key=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders')
     shipping_address = models.ForeignKey(Address, on_delete=models.SET_NULL, null=True, blank=True)
@@ -79,6 +86,22 @@ class Order(models.Model):
     def shipping_method_display(self):
         """Get shipping method display name"""
         return dict(self.SHIPPING_METHOD_CHOICES).get(self.shipping_method, 'Standard Shipping')
+    
+    @property
+    def shipping_cost(self):
+        """Get shipping cost for the selected method"""
+        from decimal import Decimal
+        return Decimal(str(self.SHIPPING_COSTS.get(self.shipping_method, 0.00)))
+    
+    @property
+    def subtotal(self):
+        """Get subtotal (order total without shipping)"""
+        return self.total
+    
+    @property
+    def total_with_shipping(self):
+        """Get total including shipping cost"""
+        return self.total + self.shipping_cost
     
     @property
     def can_be_cancelled(self):
