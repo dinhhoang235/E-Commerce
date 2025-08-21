@@ -96,6 +96,7 @@ def create_checkout_session_from_cart(request):
                     'currency': 'usd',
                     'product_data': product_data,
                     'unit_amount': int(price * 100),  # Stripe uses cents
+                    'tax_behavior': 'inclusive',  # Tax is included in the price
                 },
                 'quantity': quantity,
             })
@@ -112,20 +113,28 @@ def create_checkout_session_from_cart(request):
         if shipping_address:
             try:
                 from users.models import Address
-                shipping_address_obj = Address.objects.create(
-                    user=user,
-                    first_name=shipping_address.get('firstName', ''),
-                    last_name=shipping_address.get('lastName', ''),
-                    phone=shipping_address.get('phone', ''),
-                    address_line1=shipping_address.get('address', ''),
-                    city=shipping_address.get('city', ''),
-                    state=shipping_address.get('state', ''),
-                    zip_code=shipping_address.get('zipCode', ''),
-                    country=shipping_address.get('country', 'US'),
-                    is_default=False
-                )
+                # Convert frontend field names to backend field names
+                address_data = {
+                    'first_name': shipping_address.get('firstName', ''),
+                    'last_name': shipping_address.get('lastName', ''),
+                    'phone': shipping_address.get('phone', ''),
+                    'address_line1': shipping_address.get('address', ''),
+                    'city': shipping_address.get('city', ''),
+                    'state': shipping_address.get('state', ''),
+                    'zip_code': shipping_address.get('zipCode', ''),
+                    'country': shipping_address.get('country', 'US'),
+                    'is_default': False
+                }
+                
+                # Use get_or_create to prevent duplicate addresses
+                shipping_address_obj, created = Address.get_or_create_for_user(user, address_data)
+                if created:
+                    logger.info(f"Created new address for user {user.id}")
+                else:
+                    logger.info(f"Reusing existing address {shipping_address_obj.id} for user {user.id}")
+                    
             except Exception as e:
-                logger.error(f"Failed to create shipping address: {e}")
+                logger.error(f"Failed to create/get shipping address: {e}")
         
         # Check if there's already a pending order for this user
         # This prevents duplicate orders when user clicks "proceed to payment" multiple times
@@ -313,19 +322,41 @@ def create_checkout_session_from_cart(request):
                 logger.info(f"Existing session invalid for order {order_id}, creating new session")
         
         # Create Stripe checkout session
+        # Note: automatic_tax is disabled until business address is configured in Stripe Dashboard
+        
+        # Prepare metadata with shipping address information
+        session_metadata = {
+            'user_id': str(user.id),
+            'order_id': order_id,  # Include order ID in metadata
+            'shipping_method': shipping_method,
+            'total_amount': str(total_amount),
+        }
+        
+        # Add shipping address to metadata if available
+        if shipping_address_obj:
+            session_metadata.update({
+                'shipping_name': f"{shipping_address_obj.first_name} {shipping_address_obj.last_name}",
+                'shipping_address': shipping_address_obj.address_line1,
+                'shipping_city': shipping_address_obj.city,
+                'shipping_state': shipping_address_obj.state,
+                'shipping_zip': shipping_address_obj.zip_code,
+                'shipping_country': shipping_address_obj.country,
+                'shipping_phone': shipping_address_obj.phone or '',
+            })
+        
         session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             line_items=line_items,
             mode='payment',
             success_url=f"{settings.FRONTEND_URL}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{settings.FRONTEND_URL}/payment/cancel",
-            metadata={
-                'user_id': str(user.id),
-                'order_id': order_id,  # Include order ID in metadata
-                'shipping_method': shipping_method,
-                'total_amount': str(total_amount),
-            },
+            metadata=session_metadata,
             customer_email=user.email,
+            # TODO: Enable automatic tax after configuring business address in Stripe Dashboard
+            # automatic_tax={'enabled': True},
+            # Use address from checkout form instead of Stripe collection
+            # billing_address_collection='required',
+            # shipping_address_collection removed - using checkout form address
         )
         
         # Create or update payment transaction with pending status
@@ -611,11 +642,13 @@ def create_checkout_session(request):
                     'currency': 'usd',
                     'product_data': product_data,
                     'unit_amount': int(item.price * 100),  # Stripe uses cents
+                    'tax_behavior': 'inclusive',  # Tax is included in the price
                 },
                 'quantity': item.quantity,
             })
         
         # Create Stripe checkout session
+        # Note: automatic_tax is disabled until business address is configured in Stripe Dashboard
         session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             line_items=line_items,
@@ -627,7 +660,11 @@ def create_checkout_session(request):
                 'user_id': str(user.id),
             },
             customer_email=user.email,
-            billing_address_collection='required',
+            # Use address from checkout form instead of Stripe collection
+            # billing_address_collection='required',
+            # TODO: Enable automatic tax after configuring business address in Stripe Dashboard
+            # automatic_tax={'enabled': True},
+            # shipping_address_collection removed - using checkout form address
         )
         
         # Create or update payment transaction

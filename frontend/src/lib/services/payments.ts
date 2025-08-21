@@ -110,6 +110,7 @@ class PaymentService {
   /**
    * Create a Stripe checkout session directly from cart items
    * Order will be created after successful payment
+   * Stripe Tax will automatically calculate taxes based on location
    */
   async createCheckoutSessionFromCart(
     cartItems: CartItem[],
@@ -117,11 +118,13 @@ class PaymentService {
     shippingMethod: string = 'standard'
   ): Promise<PaymentSession> {
     try {
-      const response = await api.post('/payments/create-checkout-session-from-cart/', {
+      const requestData = {
         cart_items: cartItems,
         shipping_address: shippingAddress,
         shipping_method: shippingMethod
-      })
+      }
+      
+      const response = await api.post('/payments/create-checkout-session-from-cart/', requestData)
       return response.data
     } catch (error: any) {
       console.error('Error creating checkout session from cart:', error)

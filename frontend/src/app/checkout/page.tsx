@@ -41,9 +41,9 @@ export default function CheckoutPage() {
 
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  // Calculate tax and final total
-  const tax = total * 0.1 // 10% tax rate
-  const finalTotal = total + tax
+  // Tax-inclusive pricing: displayed prices already include tax
+  const subtotal = total
+  const finalTotal = total // Prices are already tax-inclusive
 
   useEffect(() => {
     if (user !== undefined) {
@@ -447,6 +447,12 @@ export default function CheckoutPage() {
                         </div>
                         <div className="flex-1">
                           <h4 className="font-medium">{item.name}</h4>
+                          {item.color && (
+                            <p className="text-sm text-slate-600">Color: {item.color}</p>
+                          )}
+                          {item.storage && (
+                            <p className="text-sm text-slate-600">Storage: {item.storage}</p>
+                          )}
                           <p className="text-sm text-slate-600">Quantity: {item.quantity}</p>
                         </div>
                         <div className="text-right">
@@ -463,22 +469,19 @@ export default function CheckoutPage() {
                 <div className="bg-slate-50 p-4 rounded-lg">
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span>Subtotal</span>
+                      <span>Subtotal (inc. tax)</span>
                       <span>${total.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Shipping</span>
                       <span className="text-green-600">Free</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span>Tax</span>
-                      <span>${tax.toFixed(2)}</span>
-                    </div>
                     <Separator />
                     <div className="flex justify-between font-bold text-base">
                       <span>Total</span>
                       <span>${finalTotal.toFixed(2)}</span>
                     </div>
+                    <p className="text-xs text-slate-500 mt-1">Prices include applicable taxes</p>
                   </div>
                 </div>
 
@@ -585,7 +588,7 @@ export default function CheckoutPage() {
                     <span className="font-medium text-blue-900">Secure Payment with Stripe</span>
                   </div>
                   <p className="text-sm text-blue-800">
-                    Your payment information is securely processed by Stripe.
+                    Your payment will be processed securely. The shipping address above will be used for delivery.
                   </p>
                 </div>
 
@@ -597,7 +600,7 @@ export default function CheckoutPage() {
                   className="w-full"
                   disabled={isProcessing || timeLeft <= 0}
                 >
-                  {isProcessing ? "Processing..." : timeLeft <= 0 ? "Payment Expired" : `Pay $${finalTotal.toFixed(2)} with Stripe`}
+                  {isProcessing ? "Processing..." : timeLeft <= 0 ? "Payment Expired" : `Pay $${finalTotal.toFixed(2)}`}
                 </DirectPaymentButton>
 
                 {timeLeft <= 0 && (
@@ -707,11 +710,20 @@ export default function CheckoutPage() {
               {/* Order Items */}
               <div className="space-y-3">
                 {items.map((item) => (
-                  <div key={item.id} className="flex justify-between text-sm">
-                    <span>
-                      {item.name} × {item.quantity}
-                    </span>
-                    <span>${(item.price * item.quantity).toFixed(2)}</span>
+                  <div key={item.id} className="space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium">
+                        {item.name} × {item.quantity}
+                      </span>
+                      <span>${(item.price * item.quantity).toFixed(2)}</span>
+                    </div>
+                    {(item.color || item.storage) && (
+                      <div className="text-xs text-slate-500 ml-2">
+                        {item.color && <span>Color: {item.color}</span>}
+                        {item.color && item.storage && <span> • </span>}
+                        {item.storage && <span>Storage: {item.storage}</span>}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -721,16 +733,12 @@ export default function CheckoutPage() {
               {/* Totals */}
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span>Subtotal</span>
+                  <span>Subtotal (inc. tax)</span>
                   <span>${total.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Shipping</span>
                   <span className="text-green-600">Free</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Tax</span>
-                  <span>${tax.toFixed(2)}</span>
                 </div>
               </div>
 
@@ -740,6 +748,8 @@ export default function CheckoutPage() {
                 <span>Total</span>
                 <span>${finalTotal.toFixed(2)}</span>
               </div>
+              
+              <p className="text-xs text-slate-500 text-center">Prices include applicable taxes</p>
 
               {/* Security Badge */}
               <Alert>

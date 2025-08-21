@@ -13,6 +13,7 @@ interface DirectPaymentButtonProps {
   disabled?: boolean
   children?: React.ReactNode
   className?: string
+  total?: number // Optional override for total amount
   onPaymentStart?: () => void
   onPaymentError?: (error: string) => void
 }
@@ -23,12 +24,16 @@ export default function DirectPaymentButton({
   disabled = false,
   children,
   className = "",
+  total: overrideTotal,
   onPaymentStart,
   onPaymentError,
 }: DirectPaymentButtonProps) {
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
   const { items, total } = useCart()
+  
+  // Use override total if provided, otherwise use cart total
+  const finalTotal = overrideTotal !== undefined ? overrideTotal : total
 
   const handlePayment = async () => {
     if (!items || items.length === 0) {
@@ -62,7 +67,7 @@ export default function DirectPaymentButton({
         }
       })
 
-      // Create checkout session from cart
+      // Create checkout session from cart - Stripe will handle tax calculation
       const { checkout_url } = await paymentService.createCheckoutSessionFromCart(
         cartItems,
         shippingAddress,
@@ -101,7 +106,7 @@ export default function DirectPaymentButton({
       ) : (
         <>
           <CreditCard className="h-4 w-4 mr-2" />
-          {children || `Pay $${total.toFixed(2)}`}
+          {children || `Pay $${finalTotal.toFixed(2)}`}
         </>
       )}
     </Button>

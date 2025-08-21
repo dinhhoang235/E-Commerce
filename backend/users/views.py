@@ -194,12 +194,23 @@ class AddressViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # Chỉ trả về địa chỉ của người đang đăng nhập
+        # Only return addresses for the current user
         return Address.objects.filter(user=self.request.user).order_by('-is_default', '-created_at')
 
     def perform_create(self, serializer):
-        # Gán user khi tạo mới
-        serializer.save(user=self.request.user)
+        # Use get_or_create to prevent duplicate addresses
+        address_data = serializer.validated_data
+        existing_address, created = Address.get_or_create_for_user(
+            user=self.request.user,
+            address_data=address_data
+        )
+        
+        if not created:
+            # If address already exists, update the serializer instance
+            serializer.instance = existing_address
+        else:
+            # If new address was created, use it
+            serializer.instance = existing_address
 
 class AdminCustomerListView(APIView):
     """

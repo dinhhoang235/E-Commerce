@@ -53,3 +53,61 @@ class Address(models.Model):
 
     def __str__(self):
         return f"{self.address_line1}, {self.city}, {self.state}, {self.zip_code}, {self.country}"
+    
+    @classmethod
+    def get_or_create_for_user(cls, user, address_data):
+        """
+        Get an existing address or create a new one if it doesn't exist.
+        This prevents duplicate addresses for the same user.
+        """
+        # Extract the core address fields for comparison
+        core_fields = {
+            'address_line1': address_data.get('address_line1', '').strip(),
+            'city': address_data.get('city', '').strip(),
+            'state': address_data.get('state', '').strip(),
+            'zip_code': address_data.get('zip_code', '').strip(),
+            'country': address_data.get('country', 'VN'),
+        }
+        
+        # Look for an existing address with the same core fields
+        existing_address = cls.objects.filter(
+            user=user,
+            **core_fields
+        ).first()
+        
+        if existing_address:
+            # Update other fields (name, phone) if they've changed
+            updated = False
+            first_name = address_data.get('first_name', '').strip()
+            last_name = address_data.get('last_name', '').strip()
+            phone = address_data.get('phone', '').strip()
+            
+            if existing_address.first_name != first_name:
+                existing_address.first_name = first_name
+                updated = True
+            if existing_address.last_name != last_name:
+                existing_address.last_name = last_name
+                updated = True
+            if existing_address.phone != phone:
+                existing_address.phone = phone
+                updated = True
+                
+            if updated:
+                existing_address.save()
+                
+            return existing_address, False  # (address, created)
+        else:
+            # Create a new address
+            new_address = cls.objects.create(
+                user=user,
+                first_name=address_data.get('first_name', ''),
+                last_name=address_data.get('last_name', ''),
+                phone=address_data.get('phone', ''),
+                address_line1=core_fields['address_line1'],
+                city=core_fields['city'],
+                state=core_fields['state'],
+                zip_code=core_fields['zip_code'],
+                country=core_fields['country'],
+                is_default=address_data.get('is_default', False)
+            )
+            return new_address, True  # (address, created)

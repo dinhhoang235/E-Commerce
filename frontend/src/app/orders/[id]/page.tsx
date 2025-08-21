@@ -272,16 +272,12 @@ export default function OrderDetailPage() {
 
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span>Subtotal</span>
+                    <span>Subtotal (inc. tax)</span>
                     <span>${parseFloat(order.total).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Shipping</span>
                     <span className="text-green-600">Free</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Tax</span>
-                    <span>$0.00</span>
                   </div>
                 </div>
 
@@ -291,6 +287,10 @@ export default function OrderDetailPage() {
                   <span>Total</span>
                   <span>${parseFloat(order.total).toFixed(2)}</span>
                 </div>
+                
+                <p className="text-xs text-slate-500 text-center mt-2">
+                  Prices include applicable taxes
+                </p>
 
                 {/* Order Actions */}
                 <div className="pt-4 space-y-3">

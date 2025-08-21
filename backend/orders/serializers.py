@@ -6,7 +6,10 @@ from users.models import Address
 from cart.models import CartItem
 from .utils import OrderManager
 import uuid
+import logging
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -188,20 +191,13 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             except Address.DoesNotExist:
                 pass
         elif shipping_address_data:
-            # Create a new address from the provided data
+            # Get or create address from the provided data to prevent duplicates
             try:
-                shipping_address = Address.objects.create(
-                    user=user,
-                    first_name=shipping_address_data.get('first_name', ''),
-                    last_name=shipping_address_data.get('last_name', ''),
-                    phone=shipping_address_data.get('phone', ''),
-                    address_line1=shipping_address_data.get('address_line1', ''),
-                    city=shipping_address_data.get('city', ''),
-                    state=shipping_address_data.get('state', ''),
-                    zip_code=shipping_address_data.get('zip_code', ''),
-                    country=shipping_address_data.get('country', 'VN'),
-                    is_default=False  # Don't make it default automatically
-                )
+                shipping_address, created = Address.get_or_create_for_user(user, shipping_address_data)
+                if created:
+                    logger.info(f"Created new address for user {user.id} during order creation")
+                else:
+                    logger.info(f"Reusing existing address {shipping_address.id} for user {user.id} during order creation")
             except Exception as e:
                 raise serializers.ValidationError(f"Failed to create shipping address: {str(e)}")
         
