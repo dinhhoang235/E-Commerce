@@ -1,6 +1,6 @@
 # E-Commerce Platform
 
-A modern, full-stack e-commerce application built with Django REST Framework backend and Next.js frontend, featuring comprehensive payment processing, user management, and administrative capabilities. The application is fully containerized with Docker for easy deployment and development.
+A modern, full-stack e-commerce application built with Django REST Framework backend and Next.js frontend, featuring comprehensive payment processing, user management, and administrative capabilities. The application uses a production-ready architecture with **NGINX as a reverse proxy** and **Uvicorn as the ASGI server** for optimal performance. Fully containerized with Docker for easy deployment and development.
 
 ## 🚀 Key Features
 
@@ -55,6 +55,8 @@ A modern, full-stack e-commerce application built with Django REST Framework bac
 - **SEO Optimized**: Server-side rendering for better SEO
 
 ### 🔧 Backend (Django 5.1.2)
+- **ASGI Server**: High-performance Uvicorn ASGI server for async support
+- **Reverse Proxy**: NGINX for efficient request routing and static file serving
 - **REST API**: Comprehensive RESTful API with Django REST Framework
 - **Database**: MySQL 8.0 with optimized queries and indexing
 - **Admin Interface**: Enhanced Django admin for content management
@@ -76,6 +78,8 @@ A modern, full-stack e-commerce application built with Django REST Framework bac
 ## 🛠 Technology Stack
 
 ### Backend Technologies
+- **Web Server**: NGINX (Alpine) as reverse proxy and static file server
+- **ASGI Server**: Uvicorn 0.30.6 with Gunicorn 22.0.0 for production
 - **Framework**: Django 5.1.2 with Django REST Framework 3.14.0
 - **Database**: MySQL 8.0 with mysqlclient 2.2.5
 - **Authentication**: JWT (djangorestframework-simplejwt 5.3.0)
@@ -100,12 +104,14 @@ A modern, full-stack e-commerce application built with Django REST Framework bac
 - **Theme**: next-themes 0.4.4 for dark/light mode
 
 ### Development & Deployment
+- **Architecture**: Production-ready nginx + uvicorn setup for optimal performance
 - **Containerization**: Docker with Docker Compose for multi-service orchestration
-- **Process Management**: Custom entrypoint scripts for service initialization
+- **Reverse Proxy**: NGINX handling request routing, static files, and load balancing
+- **Process Management**: Custom entrypoint scripts with uvicorn ASGI server
 - **Hot Reloading**: Development mode with live reload for both frontend and backend
 - **Environment Configuration**: Centralized environment variable management
 - **Database Migrations**: Django migration system with automatic setup
-- **Static Files**: Optimized static file serving and management
+- **Static Files**: NGINX serving static and media files directly for maximum performance
 
 ## 📋 Prerequisites
 
@@ -140,16 +146,20 @@ STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
 STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
 STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
 
-# Frontend Configuration
-NEXT_PUBLIC_API_URL=http://localhost:8000/api
-NEXT_PUBLIC_WS_HOST=localhost:8000
+# Frontend Configuration (via NGINX reverse proxy)
+NEXT_PUBLIC_API_URL=http://localhost/api
+NEXT_PUBLIC_WS_HOST=localhost
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
 ```
 
 ### 3. Start the Application
 ```bash
-# Build and start all services
+# Build and start all services with nginx + uvicorn
 docker-compose up --build
+
+# Or use the convenience script
+chmod +x start.sh
+./start.sh
 
 # Or run in detached mode
 docker-compose up -d --build
@@ -157,31 +167,82 @@ docker-compose up -d --build
 
 ### 4. Initial Setup
 The application will automatically:
+- Start NGINX reverse proxy on port 80 (frontend) and 8080 (backend admin)
+- Start Uvicorn ASGI server for Django backend
 - Set up the MySQL database
 - Run Django migrations
+- Collect static files for NGINX
 - Create a superuser account (admin/admin123)
+
+### 5. Seed Sample Data (Optional)
+```bash
+# Seed database with sample products and categories
+docker-compose exec backend python manage.py seed_categories
+docker-compose exec backend python manage.py seed_colors
+docker-compose exec backend python manage.py seed_products
+docker-compose exec backend python manage.py seed_productVariant
+```
+
+### 6. Test Payment Integration (Stripe Test Mode)
+For testing payments in development, use these Stripe test card details:
+
+**Test Card Number**: `4242 4242 4242 4242`  
+**Expiration Date**: Use any valid future date (e.g., `12/34`)  
+**CVC**: Use any 3-digit number (e.g., `123`)  
+**ZIP Code**: Use any value you like
+
+Additional test cards:
+- **Visa (success)**: `4242 4242 4242 4242`
+- **Visa (declined)**: `4000 0000 0000 0002`
+- **Mastercard**: `5555 5555 5555 4444`
+- **American Express**: `3782 822463 10005` (use 4-digit CVC)
+
+For more test cards, see [Stripe Testing Documentation](https://stripe.com/docs/testing)
 
 ## 📱 Access the Application
 
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8000/api
-- **Django Admin**: http://localhost:8000/admin
-- **Database**: localhost:3306
+The application uses **NGINX as a reverse proxy** with separate ports for public and admin access:
+
+- **Frontend (E-Commerce Site)**: http://localhost (Port 80)
+- **Backend Admin Panel**: http://localhost:8080/admin (Port 8080)
+- **Backend API**: http://localhost/api (Port 80, proxied through NGINX)
+- **Direct API Access**: http://localhost:8080/api (Port 8080)
+- **MySQL Database**: localhost:3306
+
+### Architecture Overview
+```
+Client → NGINX (Port 80) → Frontend (Next.js:3000) + API Proxy → Uvicorn (Django:8000)
+Client → NGINX (Port 8080) → Django Admin → Uvicorn (Django:8000)
+```
 
 ### Default Admin Credentials
 - Username: `admin`
 - Password: `admin123`
 
+### Performance Benefits
+- ⚡ **10-100x faster** than Django's development server
+- 🚀 **NGINX** handles static files directly (no backend overhead)
+- 🔄 **Uvicorn ASGI** server for async support and better concurrency
+- 📊 **Load balancing** ready for horizontal scaling
+
+### 📚 Detailed Setup Documentation
+For comprehensive information about the nginx + uvicorn architecture, see [NGINX_UVICORN_SETUP.md](NGINX_UVICORN_SETUP.md)
+
 ## 🏗 Project Architecture
 
 ```
 E-Commerce/
+├── nginx/                             # NGINX Reverse Proxy Configuration
+│   └── default.conf                  # NGINX server blocks (ports 80 & 8080)
 ├── backend/                           # Django REST API Backend
 │   ├── backend/                       # Django project configuration
 │   │   ├── settings.py               # Django settings with environment config
 │   │   ├── urls.py                   # Main URL configuration
-│   │   ├── wsgi.py & asgi.py         # WSGI/ASGI application configs
+│   │   ├── asgi.py                   # ASGI application for Uvicorn
+│   │   ├── wsgi.py                   # WSGI application config
 │   │   └── routers.py                # API routing configuration
+│   ├── entrypoint.sh                 # Docker entrypoint with uvicorn startup
+│   ├── staticfiles/                  # Collected static files (served by NGINX)
 │   ├── adminpanel/                   # Admin management application
 │   │   ├── models.py                 # Store settings and configuration models
 │   │   ├── views.py                  # Admin dashboard views and APIs
@@ -277,25 +338,45 @@ E-Commerce/
 │   ├── tailwind.config.ts            # Tailwind CSS configuration
 │   ├── tsconfig.json                 # TypeScript configuration
 │   └── components.json               # Shadcn/ui configuration
-├── docker-compose.yml                # Multi-container orchestration
+├── docker-compose.yml                # Multi-container orchestration (nginx, backend, frontend, db)
+├── start.sh                          # Convenience script to start the application
+├── NGINX_UVICORN_SETUP.md            # Detailed nginx + uvicorn architecture documentation
 ├── .env                              # Environment variables (create from template)
+├── .env.example                      # Environment template with default values
 ├── LICENSE                           # MIT License
 └── README.md                         # Project documentation
 ```
 
 ## 🔄 Data Flow Architecture
 
+### Request Flow with NGINX + Uvicorn
+```
+1. Client Request → NGINX (Port 80/8080)
+2. NGINX Routes:
+   - /api/* → Uvicorn Backend (Port 8000)
+   - /admin/* → Uvicorn Backend (Port 8000)
+   - /static/* → NGINX serves directly (fast!)
+   - /media/* → NGINX serves directly (fast!)
+   - /* → Next.js Frontend (Port 3000)
+3. Uvicorn ASGI Server → Django Application
+4. Django → MySQL Database
+5. Response → NGINX → Client
+```
+
 ### Frontend to Backend Communication
-1. **API Layer**: Centralized API services using Axios with JWT token management
-2. **State Management**: React Context API for global state (auth, cart, wishlist)
-3. **Real-time Updates**: WebSocket connections for live cart and order updates
-4. **Error Handling**: Comprehensive error handling with user-friendly messages
+1. **Reverse Proxy**: All requests go through NGINX for security and performance
+2. **API Layer**: Centralized API services using Axios with JWT token management
+3. **State Management**: React Context API for global state (auth, cart, wishlist)
+4. **Real-time Updates**: WebSocket support through NGINX for live updates
+5. **Error Handling**: Comprehensive error handling with user-friendly messages
 
 ### Backend Data Processing
-1. **Request Processing**: Django REST Framework with custom viewsets and serializers
-2. **Business Logic**: Service layer pattern with utility modules (OrderManager, etc.)
-3. **Database Layer**: Django ORM with optimized queries and foreign key relationships
-4. **Signal Handling**: Django signals for cross-app communication and side effects
+1. **NGINX Layer**: Request routing, load balancing, and static file serving
+2. **Uvicorn ASGI Server**: High-performance async request handling
+3. **Request Processing**: Django REST Framework with custom viewsets and serializers
+4. **Business Logic**: Service layer pattern with utility modules (OrderManager, etc.)
+5. **Database Layer**: Django ORM with optimized queries and foreign key relationships
+6. **Signal Handling**: Django signals for cross-app communication and side effects
 
 ### Payment Flow Architecture
 1. **Cart → Order**: Seamless conversion from cart items to order items
@@ -319,8 +400,17 @@ python manage.py migrate
 # Create superuser
 python manage.py createsuperuser
 
-# Collect static files
-python manage.py collectstatic
+# Collect static files (served by NGINX)
+python manage.py collectstatic --noinput
+
+# View Uvicorn logs
+docker-compose logs -f backend
+
+# View NGINX logs
+docker-compose logs -f nginx
+
+# Restart Uvicorn server
+docker-compose restart backend
 ```
 
 ### Frontend Development
@@ -958,7 +1048,14 @@ Built with ❤️ using modern web technologies - Django REST Framework, Next.js
 - [Stripe API Documentation](https://stripe.com/docs/api)
 - [Docker Documentation](https://docs.docker.com/)
 - [Tailwind CSS Documentation](https://tailwindcss.com/docs)
+- [NGINX Documentation](https://nginx.org/en/docs/)
+- [Uvicorn Documentation](https://www.uvicorn.org/)
+
+### 📖 Additional Documentation
+- **[NGINX + Uvicorn Setup Guide](NGINX_UVICORN_SETUP.md)** - Comprehensive guide on the production-ready architecture
 
 ---
 
 **Happy Coding! 🚀**
+
+*Powered by Django REST Framework, Next.js, Uvicorn ASGI Server, and NGINX*

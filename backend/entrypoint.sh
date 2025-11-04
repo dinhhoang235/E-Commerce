@@ -15,12 +15,16 @@ python manage.py makemigrations
 echo "Applying database migrate..."
 python manage.py migrate
 
+# Collect static files (important for production)
+echo "Collecting static files..."
+python manage.py collectstatic --noinput
+
 # Run setup script to create superuser and initial data
 if [ -f setup_project.py ]; then
   echo "Running setup script..."
   python setup_project.py
 fi
 
-# Start server
-echo "Starting server..."
-exec python manage.py runserver 0.0.0.0:8000
+# Start server with uvicorn
+echo "Starting uvicorn server..."
+exec uvicorn backend.asgi:application --host 0.0.0.0 --port 8000 --reload --log-level info

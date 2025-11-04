@@ -5,6 +5,10 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q, Case, When, IntegerField, Value, CharField, Count, Min, Max, Sum
 from django.utils import timezone
 from datetime import timedelta
+from django.core.cache import cache
+from backend.redis_client import redis_client
+import hashlib
+import json
 from .models import Category, Product, ProductColor, ProductVariant
 from .serializers import (
     CategorySerializer, 
@@ -15,16 +19,133 @@ from .serializers import (
 )
 from .permissions import IsAdminOrReadOnly
 
+
+def generate_cache_key(prefix: str, **kwargs) -> str:
+    """Generate a consistent cache key from prefix and parameters"""
+    params = "&".join([f"{k}={v}" for k, v in sorted(kwargs.items()) if v is not None])
+    if params:
+        params_hash = hashlib.md5(params.encode()).hexdigest()[:8]
+        return f"{prefix}:{params_hash}"
+    return prefix
+
+
+def invalidate_product_cache(product_id=None):
+    """Invalidate all product-related caches"""
+    patterns = [
+        'products:list:*',
+        'products:filters:*',
+        'products:top_sellers',
+        'products:new_arrivals',
+        'products:personalized:*',
+    ]
+    
+    if product_id:
+        patterns.extend([
+            f'product:{product_id}',
+            f'product:{product_id}:variants',
+            f'product:{product_id}:recommendations',
+        ])
+    
+    for pattern in patterns:
+        redis_client.clear_pattern(pattern)
+
+
+def invalidate_category_cache():
+    """Invalidate category-related caches"""
+    redis_client.clear_pattern('categories:*')
+    redis_client.clear_pattern('products:list:*')
+    redis_client.clear_pattern('products:filters:*')
+
+
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [IsAdminOrReadOnly]
+    
+    def list(self, request, *args, **kwargs):
+        """Get all categories with caching"""
+        cache_key = 'categories:all'
+        cached_data = redis_client.get(cache_key)
+        
+        if cached_data:
+            return Response(cached_data)
+        
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        
+        # Cache for 30 minutes
+        redis_client.set(cache_key, serializer.data, timeout=1800)
+        return Response(serializer.data)
+    
+    def retrieve(self, request, *args, **kwargs):
+        """Get single category with caching"""
+        pk = kwargs.get('pk')
+        cache_key = f'category:{pk}'
+        cached_data = redis_client.get(cache_key)
+        
+        if cached_data:
+            return Response(cached_data)
+        
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        
+        # Cache for 30 minutes
+        redis_client.set(cache_key, serializer.data, timeout=1800)
+        return Response(serializer.data)
+    
+    def perform_create(self, serializer):
+        """Clear cache after creating category"""
+        serializer.save()
+        invalidate_category_cache()
+    
+    def perform_update(self, serializer):
+        """Clear cache after updating category"""
+        serializer.save()
+        invalidate_category_cache()
+    
+    def perform_destroy(self, instance):
+        """Clear cache after deleting category"""
+        instance.delete()
+        invalidate_category_cache()
 
 
 class ProductColorViewSet(viewsets.ModelViewSet):
     queryset = ProductColor.objects.all()
     serializer_class = ProductColorSerializer
     permission_classes = [IsAdminOrReadOnly]
+    
+    def list(self, request, *args, **kwargs):
+        """Get all colors with caching"""
+        cache_key = 'product_colors:all'
+        cached_data = redis_client.get(cache_key)
+        
+        if cached_data:
+            return Response(cached_data)
+        
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        
+        # Cache for 1 hour
+        redis_client.set(cache_key, serializer.data, timeout=3600)
+        return Response(serializer.data)
+    
+    def perform_create(self, serializer):
+        """Clear cache after creating color"""
+        serializer.save()
+        redis_client.delete('product_colors:all')
+        invalidate_product_cache()
+    
+    def perform_update(self, serializer):
+        """Clear cache after updating color"""
+        serializer.save()
+        redis_client.delete('product_colors:all')
+        invalidate_product_cache()
+    
+    def perform_destroy(self, instance):
+        """Clear cache after deleting color"""
+        instance.delete()
+        redis_client.delete('product_colors:all')
+        invalidate_product_cache()
 
 
 class ProductVariantViewSet(viewsets.ModelViewSet):
@@ -44,6 +165,42 @@ class ProductVariantViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(product_id=product_id)
         
         return queryset
+    
+    def list(self, request, *args, **kwargs):
+        """Get variants with caching"""
+        product_id = request.query_params.get('product_id')
+        
+        if product_id:
+            cache_key = f'product:{product_id}:variants:list'
+            cached_data = redis_client.get(cache_key)
+            
+            if cached_data:
+                return Response(cached_data)
+        
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        
+        if product_id:
+            # Cache for 15 minutes
+            redis_client.set(cache_key, serializer.data, timeout=900)
+        
+        return Response(serializer.data)
+    
+    def perform_create(self, serializer):
+        """Clear cache after creating variant"""
+        variant = serializer.save()
+        invalidate_product_cache(variant.product.id)
+    
+    def perform_update(self, serializer):
+        """Clear cache after updating variant"""
+        variant = serializer.save()
+        invalidate_product_cache(variant.product.id)
+    
+    def perform_destroy(self, instance):
+        """Clear cache after deleting variant"""
+        product_id = instance.product.id
+        instance.delete()
+        invalidate_product_cache(product_id)
 
     @action(detail=True, methods=['post'])
     def reduce_stock(self, request, pk=None):
@@ -61,6 +218,10 @@ class ProductVariantViewSet(viewsets.ModelViewSet):
                 }, status=status.HTTP_400_BAD_REQUEST)
             
             variant.reduce_stock(quantity)
+            
+            # Invalidate cache after stock change
+            invalidate_product_cache(variant.product.id)
+            
             serializer = self.get_serializer(variant)
             return Response(serializer.data)
             
@@ -80,6 +241,10 @@ class ProductVariantViewSet(viewsets.ModelViewSet):
                 return Response({'error': 'Quantity must be positive'}, status=status.HTTP_400_BAD_REQUEST)
             
             variant.increase_stock(quantity)
+            
+            # Invalidate cache after stock change
+            invalidate_product_cache(variant.product.id)
+            
             serializer = self.get_serializer(variant)
             return Response(serializer.data)
             
@@ -174,6 +339,16 @@ class ProductViewSet(viewsets.ModelViewSet):
         return queryset
     
     def list(self, request, *args, **kwargs):
+        """Get products with caching"""
+        # Generate cache key based on query parameters
+        params = request.query_params.dict()
+        cache_key = generate_cache_key('products:list', **params)
+        
+        # Try to get from cache
+        cached_data = redis_client.get(cache_key)
+        if cached_data:
+            return Response(cached_data)
+        
         # Get the filtered queryset (including search logic)
         queryset = self.filter_queryset(self.get_queryset())
         
@@ -191,14 +366,60 @@ class ProductViewSet(viewsets.ModelViewSet):
             page = self.paginate_queryset(queryset)
             if page is not None:
                 serializer = self.get_serializer(page, many=True)
-                return self.get_paginated_response(serializer.data)
+                response = self.get_paginated_response(serializer.data)
+                # Cache paginated response for 10 minutes
+                redis_client.set(cache_key, response.data, timeout=600)
+                return response
         
         serializer = self.get_serializer(queryset, many=True)
+        
+        # Cache for 10 minutes
+        redis_client.set(cache_key, serializer.data, timeout=600)
         return Response(serializer.data)
+    
+    def retrieve(self, request, *args, **kwargs):
+        """Get single product with caching"""
+        pk = kwargs.get('pk')
+        cache_key = f'product:{pk}'
+        
+        # Try to get from cache
+        cached_data = redis_client.get(cache_key)
+        if cached_data:
+            return Response(cached_data)
+        
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        
+        # Cache for 15 minutes
+        redis_client.set(cache_key, serializer.data, timeout=900)
+        return Response(serializer.data)
+    
+    def perform_create(self, serializer):
+        """Clear cache after creating product"""
+        serializer.save()
+        invalidate_product_cache()
+    
+    def perform_update(self, serializer):
+        """Clear cache after updating product"""
+        product = serializer.save()
+        invalidate_product_cache(product.id)
+    
+    def perform_destroy(self, instance):
+        """Clear cache after deleting product"""
+        product_id = instance.id
+        instance.delete()
+        invalidate_product_cache(product_id)
     
     @action(detail=True, methods=['get'])
     def variants(self, request, pk=None):
-        """Get all variants for a specific product"""
+        """Get all variants for a specific product with caching"""
+        cache_key = f'product:{pk}:variants'
+        
+        # Try to get from cache
+        cached_data = redis_client.get(cache_key)
+        if cached_data:
+            return Response(cached_data)
+        
         try:
             product = self.get_object()
             variants = (
@@ -207,13 +428,23 @@ class ProductViewSet(viewsets.ModelViewSet):
                 .order_by('color__name', 'storage', '-created_at')
             )
             serializer = ProductVariantSerializer(variants, many=True, context={'request': request})
+            
+            # Cache for 15 minutes
+            redis_client.set(cache_key, serializer.data, timeout=900)
             return Response(serializer.data)
         except Product.DoesNotExist:
             return Response({'error': 'Product not found'}, status=status.HTTP_404_NOT_FOUND)
 
     @action(detail=True, methods=['get'])
     def recommendations(self, request, pk=None):
-        """Product detail recommendations based on category"""
+        """Product detail recommendations based on category with caching"""
+        cache_key = f'product:{pk}:recommendations'
+        
+        # Try to get from cache
+        cached_data = redis_client.get(cache_key)
+        if cached_data:
+            return Response(cached_data)
+        
         try:
             product = Product.objects.get(pk=pk)
         except Product.DoesNotExist:
@@ -235,11 +466,21 @@ class ProductViewSet(viewsets.ModelViewSet):
         # Limit to 8 recommendations
         queryset = queryset[:8]
         serializer = ProductRecommendationSerializer(queryset, many=True, context={'request': request})
+        
+        # Cache for 20 minutes
+        redis_client.set(cache_key, serializer.data, timeout=1200)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'])
     def top_sellers(self, request):
-        """Top selling products based on variant sales in the last 7 days, or all time if no sales"""
+        """Top selling products based on variant sales with caching"""
+        cache_key = 'products:top_sellers'
+        
+        # Try to get from cache
+        cached_data = redis_client.get(cache_key)
+        if cached_data:
+            return Response(cached_data)
+        
         last_7_days = timezone.now() - timedelta(days=7)
 
         # Try to get products with highest sales in the last 7 days
@@ -267,11 +508,21 @@ class ProductViewSet(viewsets.ModelViewSet):
             top_products = Product.objects.prefetch_related('variants__color').order_by('-created_at')[:10]
 
         serializer = ProductRecommendationSerializer(top_products, many=True, context={'request': request})
+        
+        # Cache for 30 minutes (top sellers don't change frequently)
+        redis_client.set(cache_key, serializer.data, timeout=1800)
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
     def new_arrivals(self, request):
-        """Latest products with available variants"""
+        """Latest products with available variants with caching"""
+        cache_key = 'products:new_arrivals'
+        
+        # Try to get from cache
+        cached_data = redis_client.get(cache_key)
+        if cached_data:
+            return Response(cached_data)
+        
         products = (
             Product.objects
             .filter(variants__is_in_stock=True)
@@ -280,12 +531,24 @@ class ProductViewSet(viewsets.ModelViewSet):
             .order_by('-created_at')[:10]
         )
         serializer = ProductRecommendationSerializer(products, many=True, context={'request': request})
+        
+        # Cache for 15 minutes (new arrivals can change more frequently)
+        redis_client.set(cache_key, serializer.data, timeout=900)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'])
     def personalized(self, request):
-        """Personalized product recommendations based on categories"""
+        """Personalized product recommendations based on categories with caching"""
         category_ids = request.query_params.getlist("categories")  # ?categories=1&categories=3
+        
+        # Generate cache key based on categories
+        cache_key = generate_cache_key('products:personalized', categories=','.join(sorted(category_ids)))
+        
+        # Try to get from cache
+        cached_data = redis_client.get(cache_key)
+        if cached_data:
+            return Response(cached_data)
+        
         queryset = Product.objects.prefetch_related('variants__color').all()
 
         if category_ids:
@@ -300,12 +563,23 @@ class ProductViewSet(viewsets.ModelViewSet):
         # Only include products that have variants in stock
         queryset = queryset.filter(variants__is_in_stock=True).distinct().order_by('-rating', '-created_at')[:10]
         serializer = ProductRecommendationSerializer(queryset, many=True, context={'request': request})
+        
+        # Cache for 20 minutes
+        redis_client.set(cache_key, serializer.data, timeout=1200)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'])
     def filters(self, request):
-        """Get available filter options"""
+        """Get available filter options with caching"""
         category_slug = request.query_params.get('category__slug', '').strip()
+        
+        # Generate cache key
+        cache_key = generate_cache_key('products:filters', category_slug=category_slug)
+        
+        # Try to get from cache
+        cached_data = redis_client.get(cache_key)
+        if cached_data:
+            return Response(cached_data)
         
         # Base queryset
         queryset = Product.objects.all()
@@ -342,9 +616,13 @@ class ProductViewSet(viewsets.ModelViewSet):
         ).values_list('storage', flat=True).distinct()
         storage_options = [storage for storage in storages if storage]
         
-        return Response({
+        response_data = {
             'price_range': price_range,
             'colors': list(colors),
             'storage_options': storage_options,
-        })
+        }
+        
+        # Cache for 30 minutes (filters don't change very frequently)
+        redis_client.set(cache_key, response_data, timeout=1800)
+        return Response(response_data)
 

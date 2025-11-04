@@ -73,13 +73,36 @@ class ProductColorSerializer(serializers.ModelSerializer):
 
 class ProductVariantSerializer(serializers.ModelSerializer):
     color = ProductColorSerializer(read_only=True)
-    color_id = serializers.PrimaryKeyRelatedField(queryset=ProductColor.objects.all(), source='color', write_only=True)
+    color_id = serializers.PrimaryKeyRelatedField(
+        queryset=ProductColor.objects.all(), 
+        source='color', 
+        write_only=True,
+        required=True
+    )
+    product_id = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.all(), 
+        source='product', 
+        write_only=True,
+        required=False
+    )
     total_stock = serializers.SerializerMethodField()
     product = serializers.SerializerMethodField()
     
     class Meta:
         model = ProductVariant
-        fields = '__all__'
+        fields = [
+            'id', 'product', 'product_id', 'color', 'color_id', 
+            'storage', 'price', 'stock', 'sold', 'is_in_stock', 
+            'total_stock', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'product', 'sold', 'created_at', 'updated_at']
+    
+    def to_internal_value(self, data):
+        # If 'product' is sent instead of 'product_id', copy it
+        if 'product' in data and 'product_id' not in data:
+            data = data.copy()
+            data['product_id'] = data['product']
+        return super().to_internal_value(data)
     
     def get_total_stock(self, obj):
         return obj.stock
