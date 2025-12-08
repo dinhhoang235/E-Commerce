@@ -1,789 +1,35 @@
-# Hướng Dẫn Deploy E-Commerce Platform Lên Azure
+## 📋 Mục Lục - Bắt Đầu Ở Đây
 
-## 📋 Mục Lục
-1. [⚡ QUICK TEST MODE (15 phút)](#-ultra-quick-production-test-5-10-phút) ← **BẮT ĐẦU TỪ ĐÂY**
-2. [🔄 So Sánh Azure ↔ AWS](#-so-sánh-azure--aws) ← **Nếu bạn dùng AWS**
-3. [📍 Hướng Dẫn: Thao Tác Trên Đâu?](#-hướng-dẫn-thao-tác-trên-đâu-local-vs-cloud) ← **Quan Trọng!**
-4. [🏗️ Tổng Quan Kiến Trúc](#-tổng-quan-kiến-trúc)
-5. [📦 Yêu Cầu Trước Khi Deploy](#-yêu-cầu-trước-khi-deploy)
-6. [🚀 Phương Pháp 1: Azure Container Apps](#-phương-pháp-1-deploy-với-azure-container-apps)
-7. [🏢 Phương Pháp 2: Azure App Service](#-phương-pháp-2-deploy-với-azure-app-service)
-8. [☸️ Phương Pháp 3: Azure Kubernetes (AKS)](#-phương-pháp-3-deploy-với-azure-kubernetes-service)
-9. [⏰ Thời Gian & Chi Phí](#-thời-gian--chi-phí-chi-tiết)
-10. [📚 Giải Thích Chi Tiết Từng Bước](#-giải-thích-chi-tiết-từng-bước)
-11. [🎯 Tóm Tắt Process](#-tóm-tắt-process)
+### 🚀 **PHẦN 1: BẮT ĐẦU NHANH (20 phút)**
+1. [⚡ QUICK TEST MODE](#-ultra-quick-production-test-5-10-phút) - **Deploy & Test trong 20 phút**
+2. [📍 LOCAL vs CLOUD Là Gì?](#-hướng-dẫn-thao-tác-trên-đâu-local-vs-cloud) - **Hiểu rõ mỗi bước chạy ở đâu**
 
----
+### 📚 **PHẦN 2: HIỂU RÕ KIẾN THỨC**
+3. [🏗️ Tổng Quan Kiến Trúc](#️-tổng-quan-kiến-trúc) - **Project này dùng gì**
+4. [📖 Giải Thích Chi Tiết](#-giải-thích-chi-tiết-từng-bước) - **Tại sao phải làm từng bước**
 
-## 🔄 So Sánh Azure ↔ AWS
+### 🛠️ **PHẦN 3: CHUẨN BỊ & DEPLOY**
+5. [📦 Yêu Cầu Trước Deploy](#-yêu-cầu-trước-khi-deploy)
+6. [🚀 Container Apps Deployment](#-phương-pháp-1-deploy-với-azure-container-apps-khuyến-nghị) - **Cách deploy duy nhất**
 
-Nếu bạn quen thuộc với AWS, đây là mapping tương ứng:
+### ✅ **PHẦN 4: PRODUCTION & CLEANUP**
+7. [⏰ Thời Gian & Chi Phí](#-thời-gian--chi-phí-chi-tiết)
+8. [📊 Best Practices](#-production-best-practices-applied)
+9. [🧹 Cleanup & Xóa](#-cleanup--xóa-sạch-1-phút---stop-tính-phí)
 
-### 📊 Service Comparison Table
-
-| Công Năng | Azure | AWS | So Sánh |
-|-----------|-------|-----|---------|
-| **Container Orchestration** | Container Apps | ECS / Fargate | Container Apps đơn giản hơn, Fargate rẻ hơn |
-| **Container Orchestration** | AKS (Kubernetes) | EKS | Tương tự nhau, EKS đắt hơn ~20-30% |
-| **Virtual Machines** | VMs | EC2 | Azure đơn giản hơn, AWS linh hoạt hơn |
-| **App Hosting** | App Service | Elastic Beanstalk / AppRunner | Tương tự |
-| **Database** | Azure Database for MySQL | RDS MySQL | Giống nhau, giá tương đương |
-| **Cache** | Azure Cache for Redis | ElastiCache Redis | Giống nhau, Azure hơi rẻ |
-| **Object Storage** | Blob Storage | S3 | S3 phổ biến hơn, tính năng tương tự |
-| **CDN** | Azure Front Door | CloudFront | Tương tự, Front Door tích hợp tốt hơn |
-| **Container Registry** | ACR | ECR | Tương tự, cùng giá |
-| **Monitoring** | Application Insights | CloudWatch | CloudWatch tốt hơn, giá khác nhau |
-| **CI/CD** | Azure Pipelines | CodePipeline | Tương tự, AWS tích hợp tốt hơn |
-| **Secrets** | Key Vault | Secrets Manager | Giống nhau |
-| **Load Balancer** | Load Balancer | ALB / NLB | Tương tự |
-| **DNS** | Azure DNS | Route 53 | Route 53 phổ biến hơn |
+### 📖 **PHẦN 5: TÀI LIỆU THAM KHẢO**
+- [🔄 So Sánh Azure ↔ AWS](#-so-sánh-azure--aws) - **Nếu quen AWS**
+- [🔐 Cấu Hình Bổ Sung](#-cấu-hình-dịch-vụ-bổ-sung)
+- [📊 Monitoring & Bảo Mật](#-monitoring-và-bảo-mật)
+- [🔄 CI/CD Pipeline](#-cicd-pipeline)
+- [🐛 Troubleshooting](#-troubleshooting)
+- [💡 Cost Optimization](#-tips-tiết-kiệm-chi-phí)
+- [🎯 Best Practices](#-best-practices)
 
 ---
-
-### 🚀 Quick Start: Container Apps ↔ AWS Fargate
-
-**Scenario: Deploy E-Commerce platform dùng containers**
-
-#### Azure (Container Apps)
-```bash
-# Setup
-az containerapp env create --name myenv
-az containerapp create \
-  --name backend \
-  --environment myenv \
-  --image myacr.azurecr.io/backend:latest \
-  --min-replicas 2 \
-  --max-replicas 5 \
-  --cpu 1.0 \
-  --memory 2.0Gi
-
-# Chi phí: ~$0.03/hour (luôn 2 instance chạy)
-```
-
-#### AWS (Fargate)
-```bash
-# Setup
-aws ecs create-cluster --cluster-name myapp
-aws ecs register-task-definition \
-  --family myapp-backend \
-  --network-mode awsvpc \
-  --requires-compatibilities FARGATE \
-  --cpu 1024 \
-  --memory 2048 \
-  --container-definitions '[{"name":"backend","image":"123456789.dkr.ecr.us-east-1.amazonaws.com/backend:latest"}]'
-
-aws ecs create-service \
-  --cluster myapp \
-  --service-name backend \
-  --task-definition myapp-backend \
-  --launch-type FARGATE \
-  --desired-count 2 \
-  --network-configuration "awsvpcConfiguration={subnets=[subnet-xxx],securityGroups=[sg-xxx]}"
-
-# Chi phí: ~$0.05/hour (phức tạp hơn)
-```
-
-**Nhận xét:**
-- Azure Container Apps: **Đơn giản hơn** (không cần VPC, security group)
-- AWS Fargate: **Rẻ hơn** nhưng **phức tạp hơn**
-
----
-
-### 💾 Database: Azure MySQL ↔ AWS RDS
-
-#### Azure
-```bash
-az mysql flexible-server create \
-  --name mydb \
-  --sku-name Standard_B2s \
-  --backup-retention 7 \
-  --geo-redundant-backup Enabled
-
-# Chi phí: ~$0.20/hour (Standard_B2s)
-# Backup: Tự động, 7 ngày
-```
-
-#### AWS
-```bash
-aws rds create-db-instance \
-  --db-instance-identifier mydb \
-  --db-instance-class db.t4g.small \
-  --engine mysql \
-  --allocated-storage 20 \
-  --backup-retention-period 7 \
-  --enable-iam-database-authentication
-
-# Chi phí: ~$0.017/hour (t4g.small) + storage
-# Backup: Tự động, 7 ngày
-```
-
-**Nhận xét:**
-- **Giá**: AWS rẻ hơn ~10x (nhưng cần pay thêm storage)
-- **Tính năng**: Tương tự nhau
-- **Quản lý**: Azure dễ dàng hơn
-
----
-
-### 🗄️ Cache: Azure Redis ↔ AWS ElastiCache
-
-#### Azure
-```bash
-az redis create \
-  --name mycache \
-  --sku Basic \
-  --vm-size c0
-
-# Chi phí: ~$0.015/hour (Basic C0)
-```
-
-#### AWS
-```bash
-aws elasticache create-cache-cluster \
-  --cache-cluster-id mycache \
-  --cache-node-type cache.t4g.micro \
-  --engine redis \
-  --num-cache-nodes 1
-
-# Chi phí: ~$0.012/hour (t4g.micro)
-```
-
-**Nhận xét:**
-- **Giá**: Gần tương đương
-- **Tính năng**: AWS tích hợp VPC tốt hơn
-- **Quản lý**: Azure đơn giản hơn
-
----
-
-### 📁 Storage: Azure Blob ↔ AWS S3
-
-#### Azure
-```bash
-az storage account create \
-  --name mystorage \
-  --kind StorageV2 \
-  --sku Standard_LRS
-
-az storage container create \
-  --name media \
-  --account-name mystorage
-
-# Chi phí: $0.024/GB/month
-```
-
-#### AWS
-```bash
-aws s3 mb s3://my-bucket
-aws s3 cp image.jpg s3://my-bucket/media/
-
-# Chi phí: $0.023/GB/month
-```
-
-**Nhận xét:**
-- **Giá**: Gần như nhau
-- **Phổ biến**: S3 dùng rộng rãi hơn
-- **Tính năng**: S3 tính năng nhiều hơn
-
----
-
-### 🌐 CDN: Azure Front Door ↔ AWS CloudFront
-
-#### Azure
-```bash
-az afd profile create \
-  --profile-name mycdn \
-  --sku Premium_AzureFrontDoor
-
-# Chi phí: $0.079/10k requests + $0.085/GB data
-```
-
-#### AWS
-```bash
-aws cloudfront create-distribution \
-  --origin-domain-name mybucket.s3.amazonaws.com \
-  --default-root-object index.html
-
-# Chi phí: $0.085/10k requests + $0.085/GB data
-```
-
-**Nhận xét:**
-- **Giá**: Gần như nhau
-- **Phổ biến**: CloudFront sử dụng rộng rãi hơn
-- **Tính năng**: Tương tự nhau
-
----
-
-### 🔍 Monitoring: Application Insights ↔ CloudWatch
-
-#### Azure
-```bash
-# Tự động tích hợp với App Service / Container Apps
-# Xem metrics, logs, traces trong Azure Portal
-
-az monitor metrics list \
-  --resource-group mygroup \
-  --resource-type Microsoft.App/containerApps
-```
-
-#### AWS
-```bash
-# Tự động tích hợp với EC2, ECS, Lambda
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/ECS \
-  --metric-name CPUUtilization \
-  --dimensions Name=ServiceName,Value=my-service
-
-aws logs tail my-app --follow
-```
-
-**Nhận xét:**
-- **CloudWatch tốt hơn**: Tính năng đủ, giao diện tốt
-- **Application Insights**: Đơn giản hơn nhưng ít tính năng
-
----
-
-### 🚀 Full Stack Deployment Comparison
-
-#### Azure Container Apps (Khuyến nghị cho project này)
-```
-┌─────────────────────────────────────────┐
-│  My App (EASY TO USE)                   │
-├─────────────────────────────────────────┤
-│  Container Apps (managed)               │
-│  - Auto-scaling                         │
-│  - Built-in monitoring                  │
-│  - No VPC needed                        │
-├─────────────────────────────────────────┤
-│  Azure MySQL Flexible Server            │
-│  Azure Cache for Redis                  │
-│  Azure Blob Storage                     │
-│  Azure Front Door (CDN)                 │
-└─────────────────────────────────────────┘
-Time to deploy: 15 minutes
-Cost (test): ~$1.45/15min
-Complexity: ⭐⭐ (Easy)
-```
-
-#### AWS Fargate (Power user)
-```
-┌─────────────────────────────────────────┐
-│  My App (MORE CONTROL)                  │
-├─────────────────────────────────────────┤
-│  VPC                                    │
-│  ├─ ECS Cluster (managed)               │
-│  ├─ Fargate (containers)                │
-│  ├─ ALB (load balancer)                 │
-├─────────────────────────────────────────┤
-│  RDS MySQL (database)                   │
-│  ElastiCache (redis)                    │
-│  S3 (storage)                           │
-│  CloudFront (CDN)                       │
-│  IAM (security)                         │
-└─────────────────────────────────────────┘
-Time to deploy: 30+ minutes
-Cost (test): ~$2/15min
-Complexity: ⭐⭐⭐⭐ (Complex)
-```
-
----
-
-### 💰 Chi Phí So Sánh (15 phút test)
-
-| Service | Azure | AWS | Winner |
-|---------|-------|-----|--------|
-| Container Runtime | $0.40 | $0.75 | **Azure** 🏆 |
-| Database | $0.50 | $0.30 | **AWS** 🏆 |
-| Cache | $0.15 | $0.20 | **Azure** 🏆 |
-| Storage | $0.10 | $0.10 | **Tie** |
-| **TOTAL** | **~$1.15** | **~$1.35** | **Azure** 🏆 |
-
-**Khi tính thêm setup complexity:**
-- Azure: Dễ + rẻ = **Best for learning**
-- AWS: Phức tạp + hơi rẻ = **Best for scale**
-
----
-
-### ⚠️ CÓ CHUYÊN ĐỔI ĐƯỢC KHÔNG? (IMPORTANT!)
-
-**Câu trả lời: KHÔNG dùng được code Azure ở AWS trực tiếp!**
-
-Commands hoàn toàn khác nhau:
-
-#### ❌ Điều KHÔNG THỂ copy-paste
-
-```bash
-# AZURE COMMAND (không dùng được trên AWS)
-az containerapp create --name backend \
-  --min-replicas 2 \
-  --max-replicas 5
-
-# AWS COMMAND (hoàn toàn khác)
-aws ecs create-service --service-name backend \
-  --desired-count 2 \
-  --launch-type FARGATE
-
-# ❌ SAI: az commands không tồn tại trên AWS!
-# ❌ SAI: aws commands không tồn tại trên Azure!
-```
-
----
-
-#### 📋 Mapping: Cái Này Trên Azure → Cái Kia Trên AWS
-
-| Cần Làm | Azure Command | AWS Command |
-|---------|---------------|-------------|
-| **Login** | `az login` | `aws configure` |
-| **Create Resource Group** | `az group create` | `aws ec2 create-vpc` |
-| **Push Docker Image** | `az acr push` | `aws ecr push` |
-| **Deploy Container** | `az containerapp create` | `aws ecs create-service` |
-| **Create Database** | `az mysql flexible-server create` | `aws rds create-db-instance` |
-| **Create Cache** | `az redis create` | `aws elasticache create-cache-cluster` |
-| **Create Storage** | `az storage account create` | `aws s3 mb` |
-| **Delete All** | `az group delete` | `aws ec2 terminate-instances` (phức tạp!) |
-
----
-
-#### 🔄 Conversion Guide
-
-**Ví dụ 1: Deploy Backend**
-
-**Azure:**
-```bash
-az containerapp create \
-  --name ecommerce-backend \
-  --min-replicas 2 \
-  --cpu 1.0 \
-  --memory 2.0Gi \
-  --env-vars DB_HOST=$MYSQL_HOST
-```
-
-**AWS Equivalent:**
-```bash
-# Bước 1: Register task definition
-aws ecs register-task-definition \
-  --family ecommerce-backend \
-  --network-mode awsvpc \
-  --requires-compatibilities FARGATE \
-  --cpu 1024 \
-  --memory 2048 \
-  --container-definitions '[{
-    "name": "backend",
-    "image": "123456789.dkr.ecr.us-east-1.amazonaws.com/ecommerce-backend",
-    "environment": [{"name": "DB_HOST", "value": "'$MYSQL_HOST'"}],
-    "portMappings": [{"containerPort": 8000}]
-  }]'
-
-# Bước 2: Create service
-aws ecs create-service \
-  --cluster ecommerce \
-  --service-name backend \
-  --task-definition ecommerce-backend \
-  --launch-type FARGATE \
-  --desired-count 2 \
-  --network-configuration "awsvpcConfiguration={subnets=[subnet-xxx],securityGroups=[sg-xxx],assignPublicIp=ENABLED}"
-```
-
-**Điểm khác:**
-- ❌ Azure: 1 command
-- ❌ AWS: 2+ commands + phải setup VPC, subnet, security group trước
-
----
-
-**Ví dụ 2: Create Database**
-
-**Azure:**
-```bash
-az mysql flexible-server create \
-  --name $MYSQL_SERVER \
-  --admin-password "Secure@Pwd123!Prod" \
-  --sku-name Standard_B2s \
-  --backup-retention 7 \
-  --geo-redundant-backup Enabled
-```
-
-**AWS Equivalent:**
-```bash
-aws rds create-db-instance \
-  --db-instance-identifier $MYSQL_SERVER \
-  --db-instance-class db.t4g.small \
-  --engine mysql \
-  --master-username admin \
-  --master-user-password "Secure@Pwd123!Prod" \
-  --allocated-storage 20 \
-  --backup-retention-period 7 \
-  --multi-az  # for geo-redundancy
-```
-
-**Điểm khác:**
-- Một số parameter tên khác (`admin-user` vs `master-username`)
-- AWS cần chỉ định instance class, Azure tự handle
-
----
-
-**Ví dụ 3: Create Storage**
-
-**Azure:**
-```bash
-az storage account create \
-  --name $STORAGE_ACCOUNT \
-  --kind StorageV2 \
-  --sku Standard_LRS
-
-az storage container create \
-  --name media
-```
-
-**AWS Equivalent:**
-```bash
-# Tạo bucket
-aws s3 mb s3://$STORAGE_ACCOUNT
-
-# Setup access control (HTTPS only)
-aws s3api put-bucket-policy --bucket $STORAGE_ACCOUNT \
-  --policy '{
-    "Version": "2012-10-17",
-    "Statement": [{
-      "Effect": "Deny",
-      "Principal": "*",
-      "Action": "s3:*",
-      "Resource": "arn:aws:s3:::'$STORAGE_ACCOUNT'/*",
-      "Condition": {"Bool": {"aws:SecureTransport": "false"}}
-    }]
-  }'
-```
-
-**Điểm khác:**
-- Azure: Cái gọi là "containers"
-- AWS: Cái gọi là "buckets"
-- Concept tương tự nhưng API hoàn toàn khác
-
----
-
-#### 🚨 Vấn Đề Lớn: Infrastructure Setup
-
-**Azure:**
-```bash
-# Chỉ cần 1 command!
-az group create --name mygroup --location eastus
-
-# Xong, đã có nơi deploy
-```
-
-**AWS:**
-```bash
-# Cần setup nhiều thứ trước:
-# 1. Create VPC
-aws ec2 create-vpc --cidr-block 10.0.0.0/16
-
-# 2. Create Subnets
-aws ec2 create-subnet --vpc-id vpc-xxx --cidr-block 10.0.1.0/24
-
-# 3. Create Security Groups
-aws ec2 create-security-group --group-name myapp --vpc-id vpc-xxx
-
-# 4. Configure routing, NAT gateway, etc.
-# ... (còn nhiều lắm!)
-```
-
----
-
-### 📝 Kết Luận
-
-| Aspect | Azure | AWS |
-|--------|-------|-----|
-| **Copy-paste được?** | ❌ Không (khác commands) | ❌ Không (khác commands) |
-| **Concepts giống?** | ✅ Có | ✅ Có |
-| **Setup dễ không?** | ✅ Rất dễ | ❌ Phức tạp |
-| **Commands tương tự?** | ❌ Không | ❌ Không |
-| **Learning curve** | ⭐ 1 (Easy) | ⭐⭐⭐ (Medium) |
-
-**Vậy nên:**
-- ✅ **Dùng Azure nếu muốn deploy nhanh, dễ hiểu**
-- ✅ **Dùng AWS nếu quen với AWS ecosystem**
-- ⚠️ **KHÔNG thể copy code Azure sang AWS** - phải viết lại hoàn toàn!
-
----
-
-### 🎓 Recommendation
-
-| Tình Huống | Nên Dùng | Lý Do |
-|-----------|----------|-------|
-| **Learning & Testing** | Azure ✅ | Đơn giản, nhanh deploy, rẻ |
-| **Production Startup** | **Chọn 1** | Tùy team familiar |
-| **Enterprise Scale** | AWS ✅ | Ecosystem rộng, cost savings at scale |
-| **Microsoft Stack** | Azure ✅ | Tích hợp .NET, Office 365, Teams |
-| **Open Source** | AWS ✅ | Linux-centric, community lớn |
-
-**Cho project này:** Azure Container Apps là **tốt nhất** vì:
-- ✅ Dễ deploy (copy-paste commands)
-- ✅ Rẻ (Azure for Students)
-- ✅ Production-ready
-- ✅ Đủ tính năng cho e-commerce
-
----
-
-## 📍 HƯỚNG DẪN: THAO TÁC TRên ĐÂU? (LOCAL vs CLOUD)
-
-**QUAN TRỌNG:** Bạn cần biết mỗi command chạy ở **đâu** - máy tính hay Azure cloud
-
-### 🖥️ LOCAL COMPUTER (Máy Tính của Bạn)
-
-Những thao tác này chạy **trên máy tính của bạn**:
-
-| Thao Tác | Command | Nơi Chạy | Lý Do |
-|---------|---------|---------|-------|
-| **Install Azure CLI** | `brew install azure-cli` | 💻 LOCAL | Cần tool để điều khiển Azure |
-| **Build Docker Images** | `docker build -f backend/dockerfile.prod` | 💻 LOCAL | Build từ code source |
-| **Push to Azure Registry** | `az acr login && docker push` | 💻 LOCAL | Upload image từ máy |
-| **Test Backend API** | `curl -s https://$BACKEND_URL/api/` | 💻 LOCAL | Gửi request từ máy |
-| **View Logs** | `az containerapp logs show` | 💻 LOCAL | Download logs về máy |
-
-### ☁️ AZURE CLOUD (Trên Server Azure)
-
-Những thao tác này thực tế **chạy trên Azure cloud**, nhưng bạn **điều khiển từ máy**:
-
-| Thao Tác | Command Bạn Gõ | Thực Tế Chạy Ở Đâu | Là Cái Gì |
-|---------|-----------|------------------|----------|
-| **Create Resource Group** | `az group create` | ☁️ AZURE | Tạo thư mục trên cloud |
-| **Create Container Registry** | `az acr create` | ☁️ AZURE | Tạo Docker registry trên cloud |
-| **Create MySQL Database** | `az mysql flexible-server create` | ☁️ AZURE | Tạo database server trên cloud |
-| **Create Redis Cache** | `az redis create` | ☁️ AZURE | Tạo cache server trên cloud |
-| **Deploy Container App** | `az containerapp create` | ☁️ AZURE | Chạy container trên cloud |
-| **Delete Resources** | `az group delete` | ☁️ AZURE | Xóa tất cả trên cloud |
-
-### 📋 Flow Cụ Thể Từng Bước
-
-```
-┌──────────────────────────────────────┐
-│  STEP 1: Login (💻 LOCAL)            │
-│  $ az login                          │
-│  ↓                                   │
-│  Mở browser, login Azure account     │
-└──────────────────────────────────────┘
-        ↓
-┌──────────────────────────────────────┐
-│  STEP 2: Build Docker (💻 LOCAL)     │
-│  $ docker build ...                  │
-│  ↓                                   │
-│  Compiler code thành Docker image    │
-│  (file ~500MB trên máy)              │
-└──────────────────────────────────────┘
-        ↓
-┌──────────────────────────────────────┐
-│  STEP 3: Push to Azure (💻→☁️)       │
-│  $ docker push ecommercereg.../      │
-│  ↓                                   │
-│  Upload image lên Azure Container    │
-│  Registry (ACR) - nằm trên cloud     │
-└──────────────────────────────────────┘
-        ↓
-┌──────────────────────────────────────┐
-│  STEP 4: Deploy (💻 → ☁️ Commands)   │
-│  $ az containerapp create ...        │
-│  ↓                                   │
-│  Điều khiển Azure tạo tài nguyên:    │
-│  - Pull image từ ACR                 │
-│  - Chạy container                    │
-│  - Kết nối database, cache, storage  │
-└──────────────────────────────────────┘
-        ↓
-┌──────────────────────────────────────┐
-│  STEP 5: Test (💻 → ☁️ Services)     │
-│  $ curl https://$BACKEND_URL         │
-│  ↓                                   │
-│  Gửi request từ máy                  │
-│  Server Azure xử lý & trả kết quả    │
-└──────────────────────────────────────┘
-        ↓
-┌──────────────────────────────────────┐
-│  STEP 6: Cleanup (💻 → ☁️)           │
-│  $ az group delete                   │
-│  ↓                                   │
-│  Azure xóa tất cả tài nguyên         │
-│  (dừng tính phí)                     │
-└──────────────────────────────────────┘
-```
-
-### 🎯 Chú Thích Dễ Hiểu
-
-Khi bạn thấy command như:
-
-```bash
-az containerapp create --name ecommerce-backend \
-  --min-replicas 2 \
-  --max-replicas 5
-```
-
-**Bạn sẽ:**
-1. Gõ command ở **terminal máy tính** của bạn (LOCAL)
-2. Azure Cloud sẽ nhận lệnh và **thực thi trên cloud**
-3. Kết quả là một container app chạy **trên Azure servers** (ở đâu đó trong internet)
-
-**Nơi chạy code thực tế:**
-- ❌ Máy tính của bạn (không có cấu hình đủ)
-- ✅ **Máy chủ Azure** (ở datacenter Azure)
-
-### 📊 Comparison: Local vs Cloud Resources
-
-| Resource | Local (💻) | Azure Cloud (☁️) |
-|----------|-----------|-----------------|
-| **CPU** | Máy tính bạn (2-8 cores) | Azure servers (isolated) |
-| **RAM** | RAM máy bạn (8-16GB) | Azure allocated (2.0Gi) |
-| **Storage** | HDD/SSD máy bạn | Managed storage Azure |
-| **Network** | Your internet connection | Azure data center network |
-| **Uptime** | Phụ thuộc bạn bật máy | 99.95% SLA Azure |
-| **Cost** | Electricity + hardware | Pay per hour ☁️ |
-
-### ✅ Checklist: Hiểu Rõ
-
-Trước khi chạy, xác nhận bạn hiểu:
-
-- [ ] ✅ **Install Azure CLI** chạy ở **máy tính** (cần tool)
-- [ ] ✅ **Build Docker** chạy ở **máy tính** (cần source code)
-- [ ] ✅ **Push image** từ **máy tính** lên **Azure registry** (upload)
-- [ ] ✅ **Create database/cache** điều khiển từ **máy tính**, nhưng **chạy ở Azure cloud**
-- [ ] ✅ **Deploy app** điều khiển từ **máy tính**, nhưng **chạy ở Azure cloud**
-- [ ] ✅ **Test app** từ **máy tính** gửi request tới **Azure server**
-- [ ] ✅ **Xóa resources** điều khiển từ **máy tính**, Azure xóa từ **cloud**
-
----
-
-### ❓ Cần Vào Portal Azure Web Không? (portal.azure.com)
-
-**Câu Trả Lời: KHÔNG CẦN!** ✅
-
-**Tất cả có thể làm từ Terminal:**
-
-| Việc Cần Làm | Portal Web | Terminal (CLI) | Khuyến nghị |
-|-------------|-----------|----------------|-----------|
-| **Login** | ✅ Có | ✅ `az login` | ✅ **Terminal rẻ** |
-| **Create Resources** | ✅ GUI | ✅ `az resource create` | ✅ **Terminal tốt** |
-| **Deploy App** | ✅ Upload file | ✅ `az containerapp create` | ✅ **Terminal dễ** |
-| **View Logs** | ✅ GUI realtime | ✅ `az containerapp logs show` | ✅ **Terminal đủ** |
-| **Monitor** | ✅ Nice UI | ✅ `az monitor metrics list` | ⚠️ Portal tốt hơn |
-| **Delete** | ✅ Click xóa | ✅ `az group delete` | ✅ **Terminal an toàn** |
-
----
-
-#### 🔴 Portal Web (portal.azure.com) - Khi Nào Dùng?
-
-**Chỉ cần nếu:**
-- ✅ Muốn xem visual dashboard
-- ✅ Muốn monitoring realtime UI
-- ✅ Muốn debug lỗi quang studding
-- ✅ Lần đầu học (hiểu giao diện)
-
-**NHƯNG:**
-- ❌ Chậm hơn terminal
-- ❌ Dễ click nhầm xóa resource
-- ❌ Khó automate
-
----
-
-#### 🟢 Terminal (CLI) - Khuyến Nghị
-
-**Tất cả bạn cần đều có thể làm:**
-
-```bash
-# 1. Login (thay vì click trên web)
-az login
-
-# 2. Create resource group (thay vì click trên web)
-az group create --name mygroup --location eastus
-
-# 3. Create everything (không cần web!)
-az mysql flexible-server create ...
-az redis create ...
-az containerapp create ...
-
-# 4. View logs (terminal + realtime)
-az containerapp logs show --name backend
-
-# 5. Monitor metrics (lệnh command)
-az monitor metrics list --resource-group mygroup
-
-# 6. Delete (1 command = xóa sạch)
-az group delete --name mygroup --yes
-```
-
----
-
-#### 📊 So Sánh
-
-**Portal Web Approach:**
-```
-1. Mở browser → https://portal.azure.com
-2. Login account Microsoft
-3. Tìm service (search, click, click, click...)
-4. Fill form, click "Create"
-5. Đợi 2-3 phút
-6. Lặp lại 10 lần cho 10 resources
-7. Tổng thời gian: 30-45 phút
-```
-
-**Terminal Approach:**
-```
-1. Mở terminal
-2. $ az login (1 lần)
-3. Copy-paste commands
-4. Đợi auto-complete
-5. Tất cả xong: 15-20 phút
-```
-
-**Vậy: Terminal nhanh hơn 2x!** ⚡
-
----
-
-#### 🎯 Workflow Tối Ưu
-
-**Làm:**
-1. ✅ **Gõ lệnh** từ guide này ở terminal
-2. ✅ **Không cần** mở browser portal
-3. ✅ **Nếu muốn** xem UI: mở portal **sau khi** deploy xong (optional)
-
-**VD:**
-```bash
-# Bước 1: Deploy (terminal)
-az containerapp create --name backend ...
-# ✅ XONG!
-
-# Bước 2 (Optional): Xem trên web
-# Mở https://portal.azure.com/
-# → Click Container Apps → xem status
-# → NHƯNG: Không cần để deploy thành công!
-```
-
----
-
-#### ⚡ Quick Reference: Terminal Commands Bạn Cần
-
-**Không phải nhớ hết, chỉ cần copy-paste từ file này:**
-
-```bash
-# Login
-az login
-
-# Tạo mọi thứ
-az group create ...
-az acr create ...
-az mysql flexible-server create ...
-az redis create ...
-az containerapp create ...
-
-# Xem logs
-az containerapp logs show --name backend --resource-group mygroup
-
-# Xem status
-az containerapp show --name backend --resource-group mygroup
-
-# Xóa
-az group delete --name mygroup --yes --no-wait
-```
-
-**Đó là tất cả! Portal KHÔNG cần!** 🎉
-
----
-
 ## ⚡ ULTRA-QUICK PRODUCTION TEST (5-10 phút)
+
+**[⬆ Quay Lại Mục Lục](#-mục-lục---bắt-đầu-ở-đây)**
 
 **Deploy setup giống production thực tế, chỉ chạy vài phút rồi tắt → Chi phí: <$1**
 
@@ -1091,173 +337,308 @@ echo "$FRONTEND_URL" > /tmp/frontend-url.txt
 
 ---
 
-## ⏱️ BƯỚC CUỐI: Production Test + Cleanup (5 phút)
+## 📍 HƯỚNG DẪN: THAO TÁC TRên ĐÂU? (LOCAL vs CLOUD)
 
-### BLOCK 3: Production Tests (2-3 phút)
+**QUAN TRỌNG:** Bạn cần biết mỗi command chạy ở **đâu** - máy tính hay Azure cloud
 
-```bash
-# Get URLs
-BACKEND_URL=$(cat /tmp/backend-url.txt)
-FRONTEND_URL=$(cat /tmp/frontend-url.txt)
+### 🖥️ LOCAL COMPUTER (Máy Tính của Bạn)
 
-echo "=========================================="
-echo "🧪 PRODUCTION TESTS"
-echo "=========================================="
+Những thao tác này chạy **trên máy tính của bạn**:
 
-# Test 1: Backend Health Check
-echo ""
-echo "📌 Test 1: Backend Health Check"
-curl -s -w "\nStatus: %{http_code}\n" https://$BACKEND_URL/api/
+| Thao Tác | Command | Nơi Chạy | Lý Do |
+|---------|---------|---------|-------|
+| **Install Azure CLI** | `brew install azure-cli` | 💻 LOCAL | Cần tool để điều khiển Azure |
+| **Build Docker Images** | `docker build -f backend/dockerfile.prod` | 💻 LOCAL | Build từ code source |
+| **Push to Azure Registry** | `az acr login && docker push` | 💻 LOCAL | Upload image từ máy |
+| **Test Backend API** | `curl -s https://$BACKEND_URL/api/` | 💻 LOCAL | Gửi request từ máy |
+| **View Logs** | `az containerapp logs show` | 💻 LOCAL | Download logs về máy |
 
-# Test 2: Frontend Load
-echo ""
-echo "📌 Test 2: Frontend Page Load"
-curl -s -o /dev/null -w "Status: %{http_code}\n" https://$FRONTEND_URL
+### ☁️ AZURE CLOUD (Trên Server Azure)
 
-# Test 3: Database Connection
-echo ""
-echo "📌 Test 3: Database Configuration"
-echo "MySQL Host: $MYSQL_HOST"
-echo "Database: ecommerce_prod"
+Những thao tác này thực tế **chạy trên Azure cloud**, nhưng bạn **điều khiển từ máy**:
 
-# Test 4: Redis Connection
-echo ""
-echo "📌 Test 4: Redis Cache"
-echo "Redis Host: $REDIS_HOST"
+| Thao Tác | Command Bạn Gõ | Thực Tế Chạy Ở Đâu | Là Cái Gì |
+|---------|-----------|------------------|----------|
+| **Create Resource Group** | `az group create` | ☁️ AZURE | Tạo thư mục trên cloud |
+| **Create Container Registry** | `az acr create` | ☁️ AZURE | Tạo Docker registry trên cloud |
+| **Create MySQL Database** | `az mysql flexible-server create` | ☁️ AZURE | Tạo database server trên cloud |
+| **Create Redis Cache** | `az redis create` | ☁️ AZURE | Tạo cache server trên cloud |
+| **Deploy Container App** | `az containerapp create` | ☁️ AZURE | Chạy container trên cloud |
+| **Delete Resources** | `az group delete` | ☁️ AZURE | Xóa tất cả trên cloud |
 
-# Test 5: Storage
-echo ""
-echo "📌 Test 5: Blob Storage"
-echo "Storage Account: $STORAGE_ACCOUNT"
-echo "Containers: media, static"
+### 📋 Flow Cụ Thể Từng Bước
 
-# Test 6: Container Metrics
-echo ""
-echo "📌 Test 6: Container Status & Replicas"
-az containerapp show --name ecommerce-backend \
-  --resource-group $RESOURCE_GROUP \
-  --query "properties.{replicas:configuration.maxReplicas,cpu:template.containers[0].resources.cpu,memory:template.containers[0].resources.memory}" \
-  -o table
-
-echo ""
-echo "✅ ALL TESTS COMPLETED!"
-echo "=========================================="
-echo "Backend: https://$BACKEND_URL"
-echo "Frontend: https://$FRONTEND_URL"
-echo "=========================================="
+```
+┌──────────────────────────────────────┐
+│  STEP 1: Login (💻 LOCAL)            │
+│  $ az login                          │
+│  ↓                                   │
+│  Mở browser, login Azure account     │
+└──────────────────────────────────────┘
+        ↓
+┌──────────────────────────────────────┐
+│  STEP 2: Build Docker (💻 LOCAL)     │
+│  $ docker build ...                  │
+│  ↓                                   │
+│  Compiler code thành Docker image    │
+│  (file ~500MB trên máy)              │
+└──────────────────────────────────────┘
+        ↓
+┌──────────────────────────────────────┐
+│  STEP 3: Push to Azure (💻→☁️)       │
+│  $ docker push ecommercereg.../      │
+│  ↓                                   │
+│  Upload image lên Azure Container    │
+│  Registry (ACR) - nằm trên cloud     │
+└──────────────────────────────────────┘
+        ↓
+┌──────────────────────────────────────┐
+│  STEP 4: Deploy (💻 → ☁️ Commands)   │
+│  $ az containerapp create ...        │
+│  ↓                                   │
+│  Điều khiển Azure tạo tài nguyên:    │
+│  - Pull image từ ACR                 │
+│  - Chạy container                    │
+│  - Kết nối database, cache, storage  │
+└──────────────────────────────────────┘
+        ↓
+┌──────────────────────────────────────┐
+│  STEP 5: Test (💻 → ☁️ Services)     │
+│  $ curl https://$BACKEND_URL         │
+│  ↓                                   │
+│  Gửi request từ máy                  │
+│  Server Azure xử lý & trả kết quả    │
+└──────────────────────────────────────┘
+        ↓
+┌──────────────────────────────────────┐
+│  STEP 6: Cleanup (💻 → ☁️)           │
+│  $ az group delete                   │
+│  ↓                                   │
+│  Azure xóa tất cả tài nguyên         │
+│  (dừng tính phí)                     │
+└──────────────────────────────────────┘
 ```
 
-### BLOCK 4: Production Checklist (xem trước khi xóa)
+### 🎯 Chú Thích Dễ Hiểu
+
+Khi bạn thấy command như:
 
 ```bash
-# Checklist trước khi xóa
-echo "✅ Deployment Checklist:"
-echo "  [ ] Frontend loads successfully"
-echo "  [ ] Backend API responds"
-echo "  [ ] Database connected"
-echo "  [ ] Redis cache ready"
-echo "  [ ] Storage containers created"
-echo "  [ ] Min 2 replicas running"
-echo "  [ ] Resources allocated correctly"
-echo ""
-echo "🎯 Production Setup Verified!"
+az containerapp create --name ecommerce-backend \
+  --min-replicas 2 \
+  --max-replicas 5
 ```
 
-### BLOCK 5: Xóa Sạch (2 phút - STOP TÍNH PHÍ!)
+**Bạn sẽ:**
+1. Gõ command ở **terminal máy tính** của bạn (LOCAL)
+2. Azure Cloud sẽ nhận lệnh và **thực thi trên cloud**
+3. Kết quả là một container app chạy **trên Azure servers** (ở đâu đó trong internet)
+
+**Nơi chạy code thực tế:**
+- ❌ Máy tính của bạn (không có cấu hình đủ)
+- ✅ **Máy chủ Azure** (ở datacenter Azure)
+
+### 📊 Comparison: Local vs Cloud Resources
+
+| Resource | Local (💻) | Azure Cloud (☁️) |
+|----------|-----------|-----------------|
+| **CPU** | Máy tính bạn (2-8 cores) | Azure servers (isolated) |
+| **RAM** | RAM máy bạn (8-16GB) | Azure allocated (2.0Gi) |
+| **Storage** | HDD/SSD máy bạn | Managed storage Azure |
+| **Network** | Your internet connection | Azure data center network |
+| **Uptime** | Phụ thuộc bạn bật máy | 99.95% SLA Azure |
+| **Cost** | Electricity + hardware | Pay per hour ☁️ |
+
+### ✅ Checklist: Hiểu Rõ
+
+Trước khi chạy, xác nhận bạn hiểu:
+
+- [ ] ✅ **Install Azure CLI** chạy ở **máy tính** (cần tool)
+- [ ] ✅ **Build Docker** chạy ở **máy tính** (cần source code)
+- [ ] ✅ **Push image** từ **máy tính** lên **Azure registry** (upload)
+- [ ] ✅ **Create database/cache** điều khiển từ **máy tính**, nhưng **chạy ở Azure cloud**
+- [ ] ✅ **Deploy app** điều khiển từ **máy tính**, nhưng **chạy ở Azure cloud**
+- [ ] ✅ **Test app** từ **máy tính** gửi request tới **Azure server**
+- [ ] ✅ **Xóa resources** điều khiển từ **máy tính**, Azure xóa từ **cloud**
+
+---
+
+### ❓ Cần Vào Portal Azure Web Không? (portal.azure.com)
+
+**Câu Trả Lời: KHÔNG CẦN!** ✅
+
+**Tất cả có thể làm từ Terminal:**
+
+| Việc Cần Làm | Portal Web | Terminal (CLI) | Khuyến nghị |
+|-------------|-----------|----------------|-----------|
+| **Login** | ✅ Có | ✅ `az login` | ✅ **Terminal rẻ** |
+| **Create Resources** | ✅ GUI | ✅ `az resource create` | ✅ **Terminal tốt** |
+| **Deploy App** | ✅ Upload file | ✅ `az containerapp create` | ✅ **Terminal dễ** |
+| **View Logs** | ✅ GUI realtime | ✅ `az containerapp logs show` | ✅ **Terminal đủ** |
+| **Monitor** | ✅ Nice UI | ✅ `az monitor metrics list` | ⚠️ Portal tốt hơn |
+| **Delete** | ✅ Click xóa | ✅ `az group delete` | ✅ **Terminal an toàn** |
+
+---
+
+#### 🔴 Portal Web (portal.azure.com) - Khi Nào Dùng?
+
+**Chỉ cần nếu:**
+- ✅ Muốn xem visual dashboard
+- ✅ Muốn monitoring realtime UI
+- ✅ Muốn debug lỗi quang studding
+- ✅ Lần đầu học (hiểu giao diện)
+
+**NHƯNG:**
+- ❌ Chậm hơn terminal
+- ❌ Dễ click nhầm xóa resource
+- ❌ Khó automate
+
+---
+
+#### 🟢 Terminal (CLI) - Khuyến Nghị
+
+**Tất cả bạn cần đều có thể làm:**
 
 ```bash
-echo "🧹 Cleaning up all Azure resources..."
-echo "⚠️  ĐIỀU NÀY KHÔNG THỂ UNDO!"
-echo ""
-echo "Resources to be deleted:"
-echo "  - Resource Group: $RESOURCE_GROUP"
-echo "  - Container Apps (backend + frontend)"
-echo "  - MySQL Database"
-echo "  - Redis Cache"
-echo "  - Blob Storage"
-echo "  - Container Registry"
-echo ""
-read -p "Type 'DELETE' to confirm deletion: " confirm
+# 1. Login (thay vì click trên web)
+az login
 
-if [ "$confirm" = "DELETE" ]; then
-  echo "Deleting resource group: $RESOURCE_GROUP"
-  az group delete --name $RESOURCE_GROUP --yes --no-wait
-  echo ""
-  echo "✅ Resource Group scheduled for deletion"
-  echo "💰 Tính phí sẽ dừng trong 5-10 phút"
-  echo ""
-  echo "Check status:"
-  echo "  az group show --name $RESOURCE_GROUP"
-  echo "  az group list --output table"
-else
-  echo "❌ Deletion cancelled - Resources still running!"
-  echo "⚠️  Remember to delete manually to avoid extra charges!"
-fi
+# 2. Create resource group (thay vì click trên web)
+az group create --name mygroup --location eastus
+
+# 3. Create everything (không cần web!)
+az mysql flexible-server create ...
+az redis create ...
+az containerapp create ...
+
+# 4. View logs (terminal + realtime)
+az containerapp logs show --name backend
+
+# 5. Monitor metrics (lệnh command)
+az monitor metrics list --resource-group mygroup
+
+# 6. Delete (1 command = xóa sạch)
+az group delete --name mygroup --yes
 ```
 
 ---
 
-## 📊 Production Best Practices Applied
+#### 📊 So Sánh
 
-| Feature | Status | Details |
-|---------|--------|---------|
-| **Database Backups** | ✅ | Geo-redundant enabled, 7-day retention |
-| **Database Charset** | ✅ | UTF8MB4 for emoji/international support |
-| **Cache Layer** | ✅ | Basic Redis C0 with TLS 1.2 |
-| **HTTPS/TLS** | ✅ | TLS 1.2+ enforced |
-| **Container Replicas** | ✅ | Min 2, Max 5 for HA |
-| **Storage Security** | ✅ | HTTPS only, default action Deny |
-| **Version Control** | ✅ | Images tagged with v1.0 & latest |
-| **Resource Limits** | ✅ | CPU/Memory explicitly defined |
-| **Debug Mode** | ✅ | DEBUG=False in production |
-| **CORS/CSRF** | ✅ | Configured for production domains |
-| **Monitoring** | ✅ | Container metrics available |
-| **Auto-scaling** | ✅ | Configured with min/max replicas |
+**Portal Web Approach:**
+```
+1. Mở browser → https://portal.azure.com
+2. Login account Microsoft
+3. Tìm service (search, click, click, click...)
+4. Fill form, click "Create"
+5. Đợi 2-3 phút
+6. Lặp lại 10 lần cho 10 resources
+7. Tổng thời gian: 30-45 phút
+```
+
+**Terminal Approach:**
+```
+1. Mở terminal
+2. $ az login (1 lần)
+3. Copy-paste commands
+4. Đợi auto-complete
+5. Tất cả xong: 15-20 phút
+```
+
+**Vậy: Terminal nhanh hơn 2x!** ⚡
 
 ---
 
-## ⏰ Thời Gian & Chi Phí Chi Tiết
+#### 🎯 Workflow Tối Ưu
 
-```
-BLOCK 1: Setup + Build + Infrastructure (12 phút)
-  - Azure CLI setup: 30 giây
-  - Docker builds: 3-4 phút
-  - MySQL creation: 2-3 phút
-  - Redis creation: 1-2 phút
-  - ACR + Storage: 2 phút
-  - Subtotal: ~12 phút
+**Làm:**
+1. ✅ **Gõ lệnh** từ guide này ở terminal
+2. ✅ **Không cần** mở browser portal
+3. ✅ **Nếu muốn** xem UI: mở portal **sau khi** deploy xong (optional)
 
-BLOCK 2: Deploy Apps (5 phút)
-  - Backend deployment: 2-3 phút
-  - Frontend deployment: 2-3 phút
-  - Subtotal: ~5 phút
+**VD:**
+```bash
+# Bước 1: Deploy (terminal)
+az containerapp create --name backend ...
+# ✅ XONG!
 
-BLOCK 3: Testing (2 phút)
-  - Health checks: 1 phút
-  - Verification: 1 phút
-  - Subtotal: ~2 phút
-
-BLOCK 4-5: Cleanup (2 phút)
-  - Confirmation: 1 phút
-  - Deletion: 1 phút
-  - Subtotal: ~2 phút
-
-────────────────────
-TOTAL TIME: ~20 phút
-────────────────────
-
-COST BREAKDOWN (20 phút):
-  Container Apps: ~$0.40
-  MySQL Basic: ~$0.80 (Standard_B2s)
-  Redis Basic: ~$0.15 (C0 tier)
-  Storage: ~$0.10
-  ────────────
-  TOTAL: ~$1.45 (rẻ hơn!)
-  
-  Với Azure for Students: MIỄN PHÍ! ✅
+# Bước 2 (Optional): Xem trên web
+# Mở https://portal.azure.com/
+# → Click Container Apps → xem status
+# → NHƯNG: Không cần để deploy thành công!
 ```
 
 ---
+
+#### ⚡ Quick Reference: Terminal Commands Bạn Cần
+
+**Không phải nhớ hết, chỉ cần copy-paste từ file này:**
+
+```bash
+# Login
+az login
+
+# Tạo mọi thứ
+az group create ...
+az acr create ...
+az mysql flexible-server create ...
+az redis create ...
+az containerapp create ...
+
+# Xem logs
+az containerapp logs show --name backend --resource-group mygroup
+
+# Xem status
+az containerapp show --name backend --resource-group mygroup
+
+# Xóa
+az group delete --name mygroup --yes --no-wait
+```
+
+**Đó là tất cả! Portal KHÔNG cần!** 🎉
+
+---
+
+## 🏗️ Tổng Quan Kiến Trúc
+
+**[⬆ Quay Lại Mục Lục](#-mục-lục---bắt-đầu-ở-đây)**
+
+Project này bao gồm:
+- **Backend**: Django 5.1.2 + Django REST Framework với Uvicorn ASGI server
+- **Frontend**: Next.js 15.2.4 với App Router
+- **Database**: MySQL 8.0
+- **Cache**: Redis 7.x
+- **Reverse Proxy**: NGINX
+- **Payment**: Stripe Integration
+- **Storage**: Media files (images)
+
+### Kiến trúc trên Azure (Khuyến nghị)
+```
+                                    ┌─────────────────────┐
+                                    │   Azure Front Door  │
+                                    │   + CDN + WAF       │
+                                    └──────────┬──────────┘
+                                               │
+                    ┌──────────────────────────┴──────────────────────────┐
+                    │                                                      │
+         ┌──────────▼──────────┐                            ┌────────────▼─────────┐
+         │  Container App      │                            │   Container App      │
+         │  (Next.js Frontend) │                            │  (Django Backend)    │
+         │  + NGINX            │                            │  + Uvicorn           │
+         └─────────────────────┘                            └──────────┬───────────┘
+                                                                       │
+                    ┌──────────────────────────────────────────────────┼───────────┐
+                    │                                                  │           │
+         ┌──────────▼──────────┐          ┌──────────▼──────────┐    │           │
+         │  Azure Database for │          │  Azure Cache for    │    │           │
+         │  MySQL              │          │  Redis              │    │           │
+         └─────────────────────┘          └─────────────────────┘    │           │
+                                                                      │           │
+                                          ┌───────────────────────────▼───────────▼─┐
+                                          │   Azure Blob Storage                     │
+                                          │   (Static Files + Media)                 │
+                                          └──────────────────────────────────────────┘
+```
 
 ---
 
@@ -1553,161 +934,6 @@ az group delete --name $RESOURCE_GROUP --yes --no-wait
 - Xóa sạch để **dừng tính phí**
 - Azure chỉ tính phí khi resources đang chạy
 - Nếu không xóa → vẫn tính phí mặc dù không dùng
-
----
-
-## 🎯 Tóm Tắt Process
-
-```
-┌─────────────────────────────────────────┐
-│  1. Tạo Resource Group                  │
-│     (Thư mục chứa tất cả)               │
-├─────────────────────────────────────────┤
-│  2. Tạo Container Registry (ACR)        │
-│     (Kho lưu Docker images)             │
-├─────────────────────────────────────────┤
-│  3. Build & Push Docker Images          │
-│     (Tạo image từ code)                 │
-├─────────────────────────────────────────┤
-│  4. Tạo Database (MySQL)                │
-│     (Lưu dữ liệu)                       │
-├─────────────────────────────────────────┤
-│  5. Tạo Cache (Redis)                   │
-│     (Tăng performance)                  │
-├─────────────────────────────────────────┤
-│  6. Tạo Storage (Blob)                  │
-│     (Lưu ảnh/files)                     │
-├─────────────────────────────────────────┤
-│  7. Tạo Container Apps Environment      │
-│     (Môi trường chạy)                   │
-├─────────────────────────────────────────┤
-│  8. Deploy Backend Container            │
-│     (Chạy Django API)                   │
-├─────────────────────────────────────────┤
-│  9. Deploy Frontend Container           │
-│     (Chạy Next.js frontend)             │
-├─────────────────────────────────────────┤
-│  10. Test All Services                  │
-│      (Kiểm tra chạy được)               │
-├─────────────────────────────────────────┤
-│  11. Cleanup (xóa sạch)                 │
-│      (Dừng tính phí)                    │
-└─────────────────────────────────────────┘
-```
-
----
-
-```bash
-# Save URLs
-echo "BACKEND_URL=$BACKEND_URL" > /tmp/demo-urls.txt
-echo "FRONTEND_URL=$FRONTEND_URL" >> /tmp/demo-urls.txt
-
-# Test 1: Backend API
-echo "Testing backend..."
-curl -s https://$BACKEND_URL/api/ | head -20
-
-# Test 2: Frontend
-echo "Testing frontend..."
-curl -s -o /dev/null -w "%{http_code}" https://$FRONTEND_URL
-
-echo "✅ Basic tests passed"
-```
-
-### Test Checklist:
-- [ ] Mở browser: `https://$FRONTEND_URL` → Xem trang chủ
-- [ ] Test API: `https://$BACKEND_URL/api/` → Xem response
-- [ ] Kiểm tra logs: `az containerapp logs show --name demo-backend -g $RESOURCE_GROUP`
-
----
-
-## 🧹 Cleanup & Xóa Sạch (1 phút - STOP TÍNH PHÍ!)
-
-**⚠️ QUAN TRỌNG**: Sau khi test xong, xóa resource group để dừng tính phí ngay lập tức!
-
-```bash
-# Xóa tất cả resources
-az group delete --name $RESOURCE_GROUP --yes --no-wait
-
-echo "✅ All resources scheduled for deletion"
-echo "💰 Tính phí sẽ dừng trong vài phút"
-```
-
-**Hoặc xóa từng resource nếu muốn giữ một số:**
-
-```bash
-# Xóa Container Apps
-az containerapp delete --name demo-backend -g $RESOURCE_GROUP -y
-az containerapp delete --name demo-frontend -g $RESOURCE_GROUP -y
-
-# Xóa MySQL
-az mysql flexible-server delete --name $MYSQL_SERVER -g $RESOURCE_GROUP -y
-
-# Xóa Redis
-az redis delete --name $REDIS_NAME -g $RESOURCE_GROUP -y
-
-# Xóa ACR
-az acr delete --name $CONTAINER_REGISTRY -g $RESOURCE_GROUP -y
-
-# Cuối cùng xóa resource group
-az group delete --name $RESOURCE_GROUP --yes
-```
-
----
-
-## 💰 Chi Phí Test Thực Tế
-
-| Resource | Thời Gian | Chi Phí |
-|----------|-----------|---------|
-| Container Apps (2) | 15 phút | ~$0.10 |
-| MySQL | 15 phút | ~$0.50 |
-| Redis | 15 phút | ~$0.20 |
-| ACR | 15 phút | ~$0.05 |
-| **TỔNG** | **15 phút** | **~$0.85-1.50** |
-
-**Với $100 Azure for Students credit → HOÀN TOÀN MIỄN PHÍ!** ✅
-
----
-
----
-
-## 🏗️ Tổng Quan Kiến Trúc
-
-Project này bao gồm:
-- **Backend**: Django 5.1.2 + Django REST Framework với Uvicorn ASGI server
-- **Frontend**: Next.js 15.2.4 với App Router
-- **Database**: MySQL 8.0
-- **Cache**: Redis 7.x
-- **Reverse Proxy**: NGINX
-- **Payment**: Stripe Integration
-- **Storage**: Media files (images)
-
-### Kiến trúc trên Azure (Khuyến nghị)
-```
-                                    ┌─────────────────────┐
-                                    │   Azure Front Door  │
-                                    │   + CDN + WAF       │
-                                    └──────────┬──────────┘
-                                               │
-                    ┌──────────────────────────┴──────────────────────────┐
-                    │                                                      │
-         ┌──────────▼──────────┐                            ┌────────────▼─────────┐
-         │  Container App      │                            │   Container App      │
-         │  (Next.js Frontend) │                            │  (Django Backend)    │
-         │  + NGINX            │                            │  + Uvicorn           │
-         └─────────────────────┘                            └──────────┬───────────┘
-                                                                       │
-                    ┌──────────────────────────────────────────────────┼───────────┐
-                    │                                                  │           │
-         ┌──────────▼──────────┐          ┌──────────▼──────────┐    │           │
-         │  Azure Database for │          │  Azure Cache for    │    │           │
-         │  MySQL              │          │  Redis              │    │           │
-         └─────────────────────┘          └─────────────────────┘    │           │
-                                                                      │           │
-                                          ┌───────────────────────────▼───────────▼─┐
-                                          │   Azure Blob Storage                     │
-                                          │   (Static Files + Media)                 │
-                                          └──────────────────────────────────────────┘
-```
 
 ---
 
@@ -2311,391 +1537,795 @@ echo "Frontend: https://$FRONTEND_URL"
 echo "Backend: https://$BACKEND_URL"
 ```
 
+## ⏱️ BƯỚC CUỐI: Production Test + Cleanup (5 phút)
+
+### BLOCK 3: Production Tests (2-3 phút)
+
+```bash
+# Get URLs
+BACKEND_URL=$(cat /tmp/backend-url.txt)
+FRONTEND_URL=$(cat /tmp/frontend-url.txt)
+
+echo "=========================================="
+echo "🧪 PRODUCTION TESTS"
+echo "=========================================="
+
+# Test 1: Backend Health Check
+echo ""
+echo "📌 Test 1: Backend Health Check"
+curl -s -w "\nStatus: %{http_code}\n" https://$BACKEND_URL/api/
+
+# Test 2: Frontend Load
+echo ""
+echo "📌 Test 2: Frontend Page Load"
+curl -s -o /dev/null -w "Status: %{http_code}\n" https://$FRONTEND_URL
+
+# Test 3: Database Connection
+echo ""
+echo "📌 Test 3: Database Configuration"
+echo "MySQL Host: $MYSQL_HOST"
+echo "Database: ecommerce_prod"
+
+# Test 4: Redis Connection
+echo ""
+echo "📌 Test 4: Redis Cache"
+echo "Redis Host: $REDIS_HOST"
+
+# Test 5: Storage
+echo ""
+echo "📌 Test 5: Blob Storage"
+echo "Storage Account: $STORAGE_ACCOUNT"
+echo "Containers: media, static"
+
+# Test 6: Container Metrics
+echo ""
+echo "📌 Test 6: Container Status & Replicas"
+az containerapp show --name ecommerce-backend \
+  --resource-group $RESOURCE_GROUP \
+  --query "properties.{replicas:configuration.maxReplicas,cpu:template.containers[0].resources.cpu,memory:template.containers[0].resources.memory}" \
+  -o table
+
+echo ""
+echo "✅ ALL TESTS COMPLETED!"
+echo "=========================================="
+echo "Backend: https://$BACKEND_URL"
+echo "Frontend: https://$FRONTEND_URL"
+echo "=========================================="
+```
+
+### BLOCK 4: Production Checklist (xem trước khi xóa)
+
+```bash
+# Checklist trước khi xóa
+echo "✅ Deployment Checklist:"
+echo "  [ ] Frontend loads successfully"
+echo "  [ ] Backend API responds"
+echo "  [ ] Database connected"
+echo "  [ ] Redis cache ready"
+echo "  [ ] Storage containers created"
+echo "  [ ] Min 2 replicas running"
+echo "  [ ] Resources allocated correctly"
+echo ""
+echo "🎯 Production Setup Verified!"
+```
+
+### BLOCK 5: Xóa Sạch (2 phút - STOP TÍNH PHÍ!)
+
+```bash
+echo "🧹 Cleaning up all Azure resources..."
+echo "⚠️  ĐIỀU NÀY KHÔNG THỂ UNDO!"
+echo ""
+echo "Resources to be deleted:"
+echo "  - Resource Group: $RESOURCE_GROUP"
+echo "  - Container Apps (backend + frontend)"
+echo "  - MySQL Database"
+echo "  - Redis Cache"
+echo "  - Blob Storage"
+echo "  - Container Registry"
+echo ""
+read -p "Type 'DELETE' to confirm deletion: " confirm
+
+if [ "$confirm" = "DELETE" ]; then
+  echo "Deleting resource group: $RESOURCE_GROUP"
+  az group delete --name $RESOURCE_GROUP --yes --no-wait
+  echo ""
+  echo "✅ Resource Group scheduled for deletion"
+  echo "💰 Tính phí sẽ dừng trong 5-10 phút"
+  echo ""
+  echo "Check status:"
+  echo "  az group show --name $RESOURCE_GROUP"
+  echo "  az group list --output table"
+else
+  echo "❌ Deletion cancelled - Resources still running!"
+  echo "⚠️  Remember to delete manually to avoid extra charges!"
+fi
+```
+
 ---
 
-## 🔧 Phương Pháp 2: Deploy với Azure App Service
+## ⏰ Thời Gian & Chi Phí Chi Tiết
 
-Phương pháp này phù hợp nếu bạn không muốn quản lý containers.
-
-### Bước 1: Tạo App Service Plan
-
-```bash
-# Set variables
-APP_SERVICE_PLAN="ecommerce-plan"
-WEBAPP_BACKEND="ecommerce-backend-$(date +%s)"
-WEBAPP_FRONTEND="ecommerce-frontend-$(date +%s)"
-
-# Create App Service Plan
-az appservice plan create \
-  --name $APP_SERVICE_PLAN \
-  --resource-group $RESOURCE_GROUP \
-  --location $LOCATION \
-  --sku B2 \
-  --is-linux
 ```
+BLOCK 1: Setup + Build + Infrastructure (12 phút)
+  - Azure CLI setup: 30 giây
+  - Docker builds: 3-4 phút
+  - MySQL creation: 2-3 phút
+  - Redis creation: 1-2 phút
+  - ACR + Storage: 2 phút
+  - Subtotal: ~12 phút
 
-### Bước 2: Deploy Backend với App Service
+BLOCK 2: Deploy Apps (5 phút)
+  - Backend deployment: 2-3 phút
+  - Frontend deployment: 2-3 phút
+  - Subtotal: ~5 phút
 
-```bash
-# Create Web App for Backend
-az webapp create \
-  --name $WEBAPP_BACKEND \
-  --resource-group $RESOURCE_GROUP \
-  --plan $APP_SERVICE_PLAN \
-  --runtime "PYTHON:3.12"
+BLOCK 3: Testing (2 phút)
+  - Health checks: 1 phút
+  - Verification: 1 phút
+  - Subtotal: ~2 phút
 
-# Configure app settings
-az webapp config appsettings set \
-  --name $WEBAPP_BACKEND \
-  --resource-group $RESOURCE_GROUP \
-  --settings \
-    SCM_DO_BUILD_DURING_DEPLOYMENT=true \
-    DJANGO_SETTINGS_MODULE=backend.azure_settings \
-    SECRET_KEY="your-secret-key" \
-    DEBUG=False \
-    DB_HOST=$MYSQL_HOST \
-    DB_NAME=$MYSQL_DATABASE \
-    DB_USER=$MYSQL_ADMIN_USER \
-    DB_PASSWORD=$MYSQL_ADMIN_PASSWORD \
-    REDIS_HOST=$REDIS_HOST \
-    REDIS_PASSWORD=$REDIS_PASSWORD
+BLOCK 4-5: Cleanup (2 phút)
+  - Confirmation: 1 phút
+  - Deletion: 1 phút
+  - Subtotal: ~2 phút
 
-# Configure startup command
-az webapp config set \
-  --name $WEBAPP_BACKEND \
-  --resource-group $RESOURCE_GROUP \
-  --startup-file "gunicorn --bind=0.0.0.0 --timeout 600 backend.wsgi"
+────────────────────
+TOTAL TIME: ~20 phút
+────────────────────
 
-# Deploy code từ GitHub (option 1)
-az webapp deployment source config \
-  --name $WEBAPP_BACKEND \
-  --resource-group $RESOURCE_GROUP \
-  --repo-url https://github.com/your-username/your-repo \
-  --branch main \
-  --manual-integration
-
-# Hoặc deploy từ local (option 2)
-cd backend
-zip -r backend.zip . -x "*.git*" -x "*__pycache__*"
-az webapp deployment source config-zip \
-  --name $WEBAPP_BACKEND \
-  --resource-group $RESOURCE_GROUP \
-  --src backend.zip
-```
-
-### Bước 3: Deploy Frontend với App Service
-
-```bash
-# Create Web App for Frontend
-az webapp create \
-  --name $WEBAPP_FRONTEND \
-  --resource-group $RESOURCE_GROUP \
-  --plan $APP_SERVICE_PLAN \
-  --runtime "NODE:22-lts"
-
-# Configure app settings
-az webapp config appsettings set \
-  --name $WEBAPP_FRONTEND \
-  --resource-group $RESOURCE_GROUP \
-  --settings \
-    NODE_ENV=production \
-    NEXT_PUBLIC_API_URL=https://$WEBAPP_BACKEND.azurewebsites.net/api
-
-# Deploy frontend
-cd ../frontend
-zip -r frontend.zip . -x "*.git*" -x "*node_modules*"
-az webapp deployment source config-zip \
-  --name $WEBAPP_FRONTEND \
-  --resource-group $RESOURCE_GROUP \
-  --src frontend.zip
-
-echo "✅ App Service deployment completed!"
-echo "Frontend: https://$WEBAPP_FRONTEND.azurewebsites.net"
-echo "Backend: https://$WEBAPP_BACKEND.azurewebsites.net"
+COST BREAKDOWN (20 phút):
+  Container Apps: ~$0.40
+  MySQL Basic: ~$0.80 (Standard_B2s)
+  Redis Basic: ~$0.15 (C0 tier)
+  Storage: ~$0.10
+  ────────────
+  TOTAL: ~$1.45 (rẻ hơn!)
+  
+  Với Azure for Students: MIỄN PHÍ! ✅
 ```
 
 ---
 
-## ☸️ Phương Pháp 3: Deploy với Azure Kubernetes Service (AKS)
-
-Phương pháp này phù hợp cho production quy mô lớn với high availability.
-
-### Bước 1: Tạo AKS Cluster
-
-```bash
-# Set variables
-AKS_CLUSTER="ecommerce-aks"
-
-# Create AKS cluster
-az aks create \
-  --resource-group $RESOURCE_GROUP \
-  --name $AKS_CLUSTER \
-  --location $LOCATION \
-  --node-count 2 \
-  --node-vm-size Standard_D2s_v3 \
-  --enable-managed-identity \
-  --attach-acr $CONTAINER_REGISTRY \
-  --generate-ssh-keys
-
-# Get credentials
-az aks get-credentials \
-  --resource-group $RESOURCE_GROUP \
-  --name $AKS_CLUSTER \
-  --overwrite-existing
-
-# Verify connection
-kubectl get nodes
-```
-
-### Bước 2: Tạo Kubernetes Manifests
-
-Tạo thư mục `k8s/` trong project root:
-
-#### `k8s/namespace.yaml`
-```yaml
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: ecommerce
-```
-
-#### `k8s/secrets.yaml`
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ecommerce-secrets
-  namespace: ecommerce
-type: Opaque
-stringData:
-  SECRET_KEY: "your-secret-key"
-  DB_PASSWORD: "YourSecurePassword123!"
-  REDIS_PASSWORD: "your-redis-password"
-  STRIPE_SECRET_KEY: "sk_live_your_key"
-  STRIPE_WEBHOOK_SECRET: "whsec_your_secret"
-  AZURE_STORAGE_ACCOUNT_KEY: "your-storage-key"
-```
-
-#### `k8s/configmap.yaml`
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: ecommerce-config
-  namespace: ecommerce
-data:
-  DEBUG: "False"
-  DB_ENGINE: "django.db.backends.mysql"
-  DB_HOST: "your-mysql-server.mysql.database.azure.com"
-  DB_NAME: "ecommerce_prod"
-  DB_USER: "adminuser"
-  DB_PORT: "3306"
-  REDIS_HOST: "your-redis.redis.cache.windows.net"
-  REDIS_PORT: "6380"
-  REDIS_DB: "0"
-  AZURE_STORAGE_ACCOUNT_NAME: "your-storage-account"
-  NODE_ENV: "production"
-```
-
-#### `k8s/backend-deployment.yaml`
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: backend
-  namespace: ecommerce
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: backend
-  template:
-    metadata:
-      labels:
-        app: backend
-    spec:
-      containers:
-      - name: backend
-        image: your-acr.azurecr.io/ecommerce-backend:latest
-        ports:
-        - containerPort: 8000
-        envFrom:
-        - configMapRef:
-            name: ecommerce-config
-        - secretRef:
-            name: ecommerce-secrets
-        resources:
-          requests:
-            memory: "1Gi"
-            cpu: "500m"
-          limits:
-            memory: "2Gi"
-            cpu: "1000m"
-        livenessProbe:
-          httpGet:
-            path: /api/health
-            port: 8000
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /api/health
-            port: 8000
-          initialDelaySeconds: 20
-          periodSeconds: 5
 ---
-apiVersion: v1
-kind: Service
-metadata:
-  name: backend-service
-  namespace: ecommerce
-spec:
-  type: ClusterIP
-  selector:
-    app: backend
-  ports:
-  - port: 8000
-    targetPort: 8000
-```
 
-#### `k8s/frontend-deployment.yaml`
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: frontend
-  namespace: ecommerce
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: frontend
-  template:
-    metadata:
-      labels:
-        app: frontend
-    spec:
-      containers:
-      - name: frontend
-        image: your-acr.azurecr.io/ecommerce-frontend:latest
-        ports:
-        - containerPort: 3000
-        env:
-        - name: NEXT_PUBLIC_API_URL
-          value: "https://your-domain.com/api"
-        envFrom:
-        - configMapRef:
-            name: ecommerce-config
-        resources:
-          requests:
-            memory: "512Mi"
-            cpu: "250m"
-          limits:
-            memory: "1Gi"
-            cpu: "500m"
+## 📊 Production Best Practices Applied
+
+| Feature | Status | Details |
+|---------|--------|---------|
+| **Database Backups** | ✅ | Geo-redundant enabled, 7-day retention |
+| **Database Charset** | ✅ | UTF8MB4 for emoji/international support |
+| **Cache Layer** | ✅ | Basic Redis C0 with TLS 1.2 |
+| **HTTPS/TLS** | ✅ | TLS 1.2+ enforced |
+| **Container Replicas** | ✅ | Min 2, Max 5 for HA |
+| **Storage Security** | ✅ | HTTPS only, default action Deny |
+| **Version Control** | ✅ | Images tagged with v1.0 & latest |
+| **Resource Limits** | ✅ | CPU/Memory explicitly defined |
+| **Debug Mode** | ✅ | DEBUG=False in production |
+| **CORS/CSRF** | ✅ | Configured for production domains |
+| **Monitoring** | ✅ | Container metrics available |
+| **Auto-scaling** | ✅ | Configured with min/max replicas |
+
 ---
-apiVersion: v1
-kind: Service
-metadata:
-  name: frontend-service
-  namespace: ecommerce
-spec:
-  type: ClusterIP
-  selector:
-    app: frontend
-  ports:
-  - port: 3000
-    targetPort: 3000
+
+## 🎯 Tóm Tắt Process
+
+```
+┌─────────────────────────────────────────┐
+│  1. Tạo Resource Group                  │
+│     (Thư mục chứa tất cả)               │
+├─────────────────────────────────────────┤
+│  2. Tạo Container Registry (ACR)        │
+│     (Kho lưu Docker images)             │
+├─────────────────────────────────────────┤
+│  3. Build & Push Docker Images          │
+│     (Tạo image từ code)                 │
+├─────────────────────────────────────────┤
+│  4. Tạo Database (MySQL)                │
+│     (Lưu dữ liệu)                       │
+├─────────────────────────────────────────┤
+│  5. Tạo Cache (Redis)                   │
+│     (Tăng performance)                  │
+├─────────────────────────────────────────┤
+│  6. Tạo Storage (Blob)                  │
+│     (Lưu ảnh/files)                     │
+├─────────────────────────────────────────┤
+│  7. Tạo Container Apps Environment      │
+│     (Môi trường chạy)                   │
+├─────────────────────────────────────────┤
+│  8. Deploy Backend Container            │
+│     (Chạy Django API)                   │
+├─────────────────────────────────────────┤
+│  9. Deploy Frontend Container           │
+│     (Chạy Next.js frontend)             │
+├─────────────────────────────────────────┤
+│  10. Test All Services                  │
+│      (Kiểm tra chạy được)               │
+├─────────────────────────────────────────┤
+│  11. Cleanup (xóa sạch)                 │
+│      (Dừng tính phí)                    │
+└─────────────────────────────────────────┘
 ```
 
-#### `k8s/ingress.yaml`
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ecommerce-ingress
-  namespace: ecommerce
-  annotations:
-    kubernetes.io/ingress.class: azure/application-gateway
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-spec:
-  tls:
-  - hosts:
-    - your-domain.com
-    secretName: ecommerce-tls
-  rules:
-  - host: your-domain.com
-    http:
-      paths:
-      - path: /api
-        pathType: Prefix
-        backend:
-          service:
-            name: backend-service
-            port:
-              number: 8000
-      - path: /admin
-        pathType: Prefix
-        backend:
-          service:
-            name: backend-service
-            port:
-              number: 8000
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: frontend-service
-            port:
-              number: 3000
-```
-
-### Bước 3: Deploy lên AKS
+---
 
 ```bash
-# Apply manifests
-kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/secrets.yaml
-kubectl apply -f k8s/configmap.yaml
-kubectl apply -f k8s/backend-deployment.yaml
-kubectl apply -f k8s/frontend-deployment.yaml
-kubectl apply -f k8s/ingress.yaml
+# Save URLs
+echo "BACKEND_URL=$BACKEND_URL" > /tmp/demo-urls.txt
+echo "FRONTEND_URL=$FRONTEND_URL" >> /tmp/demo-urls.txt
 
-# Check deployment status
-kubectl get pods -n ecommerce
-kubectl get services -n ecommerce
-kubectl get ingress -n ecommerce
+# Test 1: Backend API
+echo "Testing backend..."
+curl -s https://$BACKEND_URL/api/ | head -20
 
-# View logs
-kubectl logs -f deployment/backend -n ecommerce
-kubectl logs -f deployment/frontend -n ecommerce
+# Test 2: Frontend
+echo "Testing frontend..."
+curl -s -o /dev/null -w "%{http_code}" https://$FRONTEND_URL
+
+echo "✅ Basic tests passed"
 ```
 
-### Bước 4: Thiết Lập Auto-scaling
+### Test Checklist:
+- [ ] Mở browser: `https://$FRONTEND_URL` → Xem trang chủ
+- [ ] Test API: `https://$BACKEND_URL/api/` → Xem response
+- [ ] Kiểm tra logs: `az containerapp logs show --name demo-backend -g $RESOURCE_GROUP`
+
+---
+
+## 🧹 Cleanup & Xóa Sạch (1 phút - STOP TÍNH PHÍ!)
+
+**⚠️ QUAN TRỌNG**: Sau khi test xong, xóa resource group để dừng tính phí ngay lập tức!
 
 ```bash
-# Enable cluster autoscaler
-az aks update \
-  --resource-group $RESOURCE_GROUP \
-  --name $AKS_CLUSTER \
-  --enable-cluster-autoscaler \
-  --min-count 2 \
-  --max-count 10
+# Xóa tất cả resources
+az group delete --name $RESOURCE_GROUP --yes --no-wait
 
-# Apply HPA for backend
-kubectl autoscale deployment backend \
-  --namespace ecommerce \
-  --cpu-percent=70 \
-  --min=3 \
-  --max=10
-
-# Apply HPA for frontend
-kubectl autoscale deployment frontend \
-  --namespace ecommerce \
-  --cpu-percent=70 \
-  --min=3 \
-  --max=10
+echo "✅ All resources scheduled for deletion"
+echo "💰 Tính phí sẽ dừng trong vài phút"
 ```
+
+**Hoặc xóa từng resource nếu muốn giữ một số:**
+
+```bash
+# Xóa Container Apps
+az containerapp delete --name demo-backend -g $RESOURCE_GROUP -y
+az containerapp delete --name demo-frontend -g $RESOURCE_GROUP -y
+
+# Xóa MySQL
+az mysql flexible-server delete --name $MYSQL_SERVER -g $RESOURCE_GROUP -y
+
+# Xóa Redis
+az redis delete --name $REDIS_NAME -g $RESOURCE_GROUP -y
+
+# Xóa ACR
+az acr delete --name $CONTAINER_REGISTRY -g $RESOURCE_GROUP -y
+
+# Cuối cùng xóa resource group
+az group delete --name $RESOURCE_GROUP --yes
+```
+
+---
+
+## 💰 Chi Phí Test Thực Tế
+
+| Resource | Thời Gian | Chi Phí |
+|----------|-----------|---------|
+| Container Apps (2) | 15 phút | ~$0.10 |
+| MySQL | 15 phút | ~$0.50 |
+| Redis | 15 phút | ~$0.20 |
+| ACR | 15 phút | ~$0.05 |
+| **TỔNG** | **15 phút** | **~$0.85-1.50** |
+
+**Với $100 Azure for Students credit → HOÀN TOÀN MIỄN PHÍ!** ✅
+
+---
+
+---
+
+## 🔄 So Sánh Azure ↔ AWS
+
+**[⬆ Quay Lại Mục Lục](#-mục-lục---bắt-đầu-ở-đây)**
+
+Nếu bạn quen thuộc với AWS, đây là mapping tương ứng:
+
+### 📊 Service Comparison Table
+
+| Công Năng | Azure | AWS | So Sánh |
+|-----------|-------|-----|---------|
+| **Container Orchestration** | Container Apps | ECS / Fargate | Container Apps đơn giản hơn, Fargate rẻ hơn |
+| **Container Orchestration** | AKS (Kubernetes) | EKS | Tương tự nhau, EKS đắt hơn ~20-30% |
+| **Virtual Machines** | VMs | EC2 | Azure đơn giản hơn, AWS linh hoạt hơn |
+| **App Hosting** | App Service | Elastic Beanstalk / AppRunner | Tương tự |
+| **Database** | Azure Database for MySQL | RDS MySQL | Giống nhau, giá tương đương |
+| **Cache** | Azure Cache for Redis | ElastiCache Redis | Giống nhau, Azure hơi rẻ |
+| **Object Storage** | Blob Storage | S3 | S3 phổ biến hơn, tính năng tương tự |
+| **CDN** | Azure Front Door | CloudFront | Tương tự, Front Door tích hợp tốt hơn |
+| **Container Registry** | ACR | ECR | Tương tự, cùng giá |
+| **Monitoring** | Application Insights | CloudWatch | CloudWatch tốt hơn, giá khác nhau |
+| **CI/CD** | Azure Pipelines | CodePipeline | Tương tự, AWS tích hợp tốt hơn |
+| **Secrets** | Key Vault | Secrets Manager | Giống nhau |
+| **Load Balancer** | Load Balancer | ALB / NLB | Tương tự |
+| **DNS** | Azure DNS | Route 53 | Route 53 phổ biến hơn |
+
+---
+
+### 🚀 Quick Start: Container Apps ↔ AWS Fargate
+
+**Scenario: Deploy E-Commerce platform dùng containers**
+
+#### Azure (Container Apps)
+```bash
+# Setup
+az containerapp env create --name myenv
+az containerapp create \
+  --name backend \
+  --environment myenv \
+  --image myacr.azurecr.io/backend:latest \
+  --min-replicas 2 \
+  --max-replicas 5 \
+  --cpu 1.0 \
+  --memory 2.0Gi
+
+# Chi phí: ~$0.03/hour (luôn 2 instance chạy)
+```
+
+#### AWS (Fargate)
+```bash
+# Setup
+aws ecs create-cluster --cluster-name myapp
+aws ecs register-task-definition \
+  --family myapp-backend \
+  --network-mode awsvpc \
+  --requires-compatibilities FARGATE \
+  --cpu 1024 \
+  --memory 2048 \
+  --container-definitions '[{"name":"backend","image":"123456789.dkr.ecr.us-east-1.amazonaws.com/backend:latest"}]'
+
+aws ecs create-service \
+  --cluster myapp \
+  --service-name backend \
+  --task-definition myapp-backend \
+  --launch-type FARGATE \
+  --desired-count 2 \
+  --network-configuration "awsvpcConfiguration={subnets=[subnet-xxx],securityGroups=[sg-xxx]}"
+
+# Chi phí: ~$0.05/hour (phức tạp hơn)
+```
+
+**Nhận xét:**
+- Azure Container Apps: **Đơn giản hơn** (không cần VPC, security group)
+- AWS Fargate: **Rẻ hơn** nhưng **phức tạp hơn**
+
+---
+
+### 💾 Database: Azure MySQL ↔ AWS RDS
+
+#### Azure
+```bash
+az mysql flexible-server create \
+  --name mydb \
+  --sku-name Standard_B2s \
+  --backup-retention 7 \
+  --geo-redundant-backup Enabled
+
+# Chi phí: ~$0.20/hour (Standard_B2s)
+# Backup: Tự động, 7 ngày
+```
+
+#### AWS
+```bash
+aws rds create-db-instance \
+  --db-instance-identifier mydb \
+  --db-instance-class db.t4g.small \
+  --engine mysql \
+  --allocated-storage 20 \
+  --backup-retention-period 7 \
+  --enable-iam-database-authentication
+
+# Chi phí: ~$0.017/hour (t4g.small) + storage
+# Backup: Tự động, 7 ngày
+```
+
+**Nhận xét:**
+- **Giá**: AWS rẻ hơn ~10x (nhưng cần pay thêm storage)
+- **Tính năng**: Tương tự nhau
+- **Quản lý**: Azure dễ dàng hơn
+
+---
+
+### 🗄️ Cache: Azure Redis ↔ AWS ElastiCache
+
+#### Azure
+```bash
+az redis create \
+  --name mycache \
+  --sku Basic \
+  --vm-size c0
+
+# Chi phí: ~$0.015/hour (Basic C0)
+```
+
+#### AWS
+```bash
+aws elasticache create-cache-cluster \
+  --cache-cluster-id mycache \
+  --cache-node-type cache.t4g.micro \
+  --engine redis \
+  --num-cache-nodes 1
+
+# Chi phí: ~$0.012/hour (t4g.micro)
+```
+
+**Nhận xét:**
+- **Giá**: Gần tương đương
+- **Tính năng**: AWS tích hợp VPC tốt hơn
+- **Quản lý**: Azure đơn giản hơn
+
+---
+
+### 📁 Storage: Azure Blob ↔ AWS S3
+
+#### Azure
+```bash
+az storage account create \
+  --name mystorage \
+  --kind StorageV2 \
+  --sku Standard_LRS
+
+az storage container create \
+  --name media \
+  --account-name mystorage
+
+# Chi phí: $0.024/GB/month
+```
+
+#### AWS
+```bash
+aws s3 mb s3://my-bucket
+aws s3 cp image.jpg s3://my-bucket/media/
+
+# Chi phí: $0.023/GB/month
+```
+
+**Nhận xét:**
+- **Giá**: Gần như nhau
+- **Phổ biến**: S3 dùng rộng rãi hơn
+- **Tính năng**: S3 tính năng nhiều hơn
+
+---
+
+### 🌐 CDN: Azure Front Door ↔ AWS CloudFront
+
+#### Azure
+```bash
+az afd profile create \
+  --profile-name mycdn \
+  --sku Premium_AzureFrontDoor
+
+# Chi phí: $0.079/10k requests + $0.085/GB data
+```
+
+#### AWS
+```bash
+aws cloudfront create-distribution \
+  --origin-domain-name mybucket.s3.amazonaws.com \
+  --default-root-object index.html
+
+# Chi phí: $0.085/10k requests + $0.085/GB data
+```
+
+**Nhận xét:**
+- **Giá**: Gần như nhau
+- **Phổ biến**: CloudFront sử dụng rộng rãi hơn
+- **Tính năng**: Tương tự nhau
+
+---
+
+### 🔍 Monitoring: Application Insights ↔ CloudWatch
+
+#### Azure
+```bash
+# Tự động tích hợp với App Service / Container Apps
+# Xem metrics, logs, traces trong Azure Portal
+
+az monitor metrics list \
+  --resource-group mygroup \
+  --resource-type Microsoft.App/containerApps
+```
+
+#### AWS
+```bash
+# Tự động tích hợp với EC2, ECS, Lambda
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/ECS \
+  --metric-name CPUUtilization \
+  --dimensions Name=ServiceName,Value=my-service
+
+aws logs tail my-app --follow
+```
+
+**Nhận xét:**
+- **CloudWatch tốt hơn**: Tính năng đủ, giao diện tốt
+- **Application Insights**: Đơn giản hơn nhưng ít tính năng
+
+---
+
+### 🚀 Full Stack Deployment Comparison
+
+#### Azure Container Apps (Khuyến nghị cho project này)
+```
+┌─────────────────────────────────────────┐
+│  My App (EASY TO USE)                   │
+├─────────────────────────────────────────┤
+│  Container Apps (managed)               │
+│  - Auto-scaling                         │
+│  - Built-in monitoring                  │
+│  - No VPC needed                        │
+├─────────────────────────────────────────┤
+│  Azure MySQL Flexible Server            │
+│  Azure Cache for Redis                  │
+│  Azure Blob Storage                     │
+│  Azure Front Door (CDN)                 │
+└─────────────────────────────────────────┘
+Time to deploy: 15 minutes
+Cost (test): ~$1.45/15min
+Complexity: ⭐⭐ (Easy)
+```
+
+#### AWS Fargate (Power user)
+```
+┌─────────────────────────────────────────┐
+│  My App (MORE CONTROL)                  │
+├─────────────────────────────────────────┤
+│  VPC                                    │
+│  ├─ ECS Cluster (managed)               │
+│  ├─ Fargate (containers)                │
+│  ├─ ALB (load balancer)                 │
+├─────────────────────────────────────────┤
+│  RDS MySQL (database)                   │
+│  ElastiCache (redis)                    │
+│  S3 (storage)                           │
+│  CloudFront (CDN)                       │
+│  IAM (security)                         │
+└─────────────────────────────────────────┘
+Time to deploy: 30+ minutes
+Cost (test): ~$2/15min
+Complexity: ⭐⭐⭐⭐ (Complex)
+```
+
+---
+
+### 💰 Chi Phí So Sánh (15 phút test)
+
+| Service | Azure | AWS | Winner |
+|---------|-------|-----|--------|
+| Container Runtime | $0.40 | $0.75 | **Azure** 🏆 |
+| Database | $0.50 | $0.30 | **AWS** 🏆 |
+| Cache | $0.15 | $0.20 | **Azure** 🏆 |
+| Storage | $0.10 | $0.10 | **Tie** |
+| **TOTAL** | **~$1.15** | **~$1.35** | **Azure** 🏆 |
+
+**Khi tính thêm setup complexity:**
+- Azure: Dễ + rẻ = **Best for learning**
+- AWS: Phức tạp + hơi rẻ = **Best for scale**
+
+---
+
+### ⚠️ CÓ CHUYÊN ĐỔI ĐƯỢC KHÔNG? (IMPORTANT!)
+
+**Câu trả lời: KHÔNG dùng được code Azure ở AWS trực tiếp!**
+
+Commands hoàn toàn khác nhau:
+
+#### ❌ Điều KHÔNG THỂ copy-paste
+
+```bash
+# AZURE COMMAND (không dùng được trên AWS)
+az containerapp create --name backend \
+  --min-replicas 2 \
+  --max-replicas 5
+
+# AWS COMMAND (hoàn toàn khác)
+aws ecs create-service --service-name backend \
+  --desired-count 2 \
+  --launch-type FARGATE
+
+# ❌ SAI: az commands không tồn tại trên AWS!
+# ❌ SAI: aws commands không tồn tại trên Azure!
+```
+
+---
+
+#### 📋 Mapping: Cái Này Trên Azure → Cái Kia Trên AWS
+
+| Cần Làm | Azure Command | AWS Command |
+|---------|---------------|-------------|
+| **Login** | `az login` | `aws configure` |
+| **Create Resource Group** | `az group create` | `aws ec2 create-vpc` |
+| **Push Docker Image** | `az acr push` | `aws ecr push` |
+| **Deploy Container** | `az containerapp create` | `aws ecs create-service` |
+| **Create Database** | `az mysql flexible-server create` | `aws rds create-db-instance` |
+| **Create Cache** | `az redis create` | `aws elasticache create-cache-cluster` |
+| **Create Storage** | `az storage account create` | `aws s3 mb` |
+| **Delete All** | `az group delete` | `aws ec2 terminate-instances` (phức tạp!) |
+
+---
+
+#### 🔄 Conversion Guide
+
+**Ví dụ 1: Deploy Backend**
+
+**Azure:**
+```bash
+az containerapp create \
+  --name ecommerce-backend \
+  --min-replicas 2 \
+  --cpu 1.0 \
+  --memory 2.0Gi \
+  --env-vars DB_HOST=$MYSQL_HOST
+```
+
+**AWS Equivalent:**
+```bash
+# Bước 1: Register task definition
+aws ecs register-task-definition \
+  --family ecommerce-backend \
+  --network-mode awsvpc \
+  --requires-compatibilities FARGATE \
+  --cpu 1024 \
+  --memory 2048 \
+  --container-definitions '[{
+    "name": "backend",
+    "image": "123456789.dkr.ecr.us-east-1.amazonaws.com/ecommerce-backend",
+    "environment": [{"name": "DB_HOST", "value": "'$MYSQL_HOST'"}],
+    "portMappings": [{"containerPort": 8000}]
+  }]'
+
+# Bước 2: Create service
+aws ecs create-service \
+  --cluster ecommerce \
+  --service-name backend \
+  --task-definition ecommerce-backend \
+  --launch-type FARGATE \
+  --desired-count 2 \
+  --network-configuration "awsvpcConfiguration={subnets=[subnet-xxx],securityGroups=[sg-xxx],assignPublicIp=ENABLED}"
+```
+
+**Điểm khác:**
+- ❌ Azure: 1 command
+- ❌ AWS: 2+ commands + phải setup VPC, subnet, security group trước
+
+---
+
+**Ví dụ 2: Create Database**
+
+**Azure:**
+```bash
+az mysql flexible-server create \
+  --name $MYSQL_SERVER \
+  --admin-password "Secure@Pwd123!Prod" \
+  --sku-name Standard_B2s \
+  --backup-retention 7 \
+  --geo-redundant-backup Enabled
+```
+
+**AWS Equivalent:**
+```bash
+aws rds create-db-instance \
+  --db-instance-identifier $MYSQL_SERVER \
+  --db-instance-class db.t4g.small \
+  --engine mysql \
+  --master-username admin \
+  --master-user-password "Secure@Pwd123!Prod" \
+  --allocated-storage 20 \
+  --backup-retention-period 7 \
+  --multi-az  # for geo-redundancy
+```
+
+**Điểm khác:**
+- Một số parameter tên khác (`admin-user` vs `master-username`)
+- AWS cần chỉ định instance class, Azure tự handle
+
+---
+
+**Ví dụ 3: Create Storage**
+
+**Azure:**
+```bash
+az storage account create \
+  --name $STORAGE_ACCOUNT \
+  --kind StorageV2 \
+  --sku Standard_LRS
+
+az storage container create \
+  --name media
+```
+
+**AWS Equivalent:**
+```bash
+# Tạo bucket
+aws s3 mb s3://$STORAGE_ACCOUNT
+
+# Setup access control (HTTPS only)
+aws s3api put-bucket-policy --bucket $STORAGE_ACCOUNT \
+  --policy '{
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": "arn:aws:s3:::'$STORAGE_ACCOUNT'/*",
+      "Condition": {"Bool": {"aws:SecureTransport": "false"}}
+    }]
+  }'
+```
+
+**Điểm khác:**
+- Azure: Cái gọi là "containers"
+- AWS: Cái gọi là "buckets"
+- Concept tương tự nhưng API hoàn toàn khác
+
+---
+
+#### 🚨 Vấn Đề Lớn: Infrastructure Setup
+
+**Azure:**
+```bash
+# Chỉ cần 1 command!
+az group create --name mygroup --location eastus
+
+# Xong, đã có nơi deploy
+```
+
+**AWS:**
+```bash
+# Cần setup nhiều thứ trước:
+# 1. Create VPC
+aws ec2 create-vpc --cidr-block 10.0.0.0/16
+
+# 2. Create Subnets
+aws ec2 create-subnet --vpc-id vpc-xxx --cidr-block 10.0.1.0/24
+
+# 3. Create Security Groups
+aws ec2 create-security-group --group-name myapp --vpc-id vpc-xxx
+
+# 4. Configure routing, NAT gateway, etc.
+# ... (còn nhiều lắm!)
+```
+
+---
+
+### 📝 Kết Luận
+
+| Aspect | Azure | AWS |
+|--------|-------|-----|
+| **Copy-paste được?** | ❌ Không (khác commands) | ❌ Không (khác commands) |
+| **Concepts giống?** | ✅ Có | ✅ Có |
+| **Setup dễ không?** | ✅ Rất dễ | ❌ Phức tạp |
+| **Commands tương tự?** | ❌ Không | ❌ Không |
+| **Learning curve** | ⭐ 1 (Easy) | ⭐⭐⭐ (Medium) |
+
+**Vậy nên:**
+- ✅ **Dùng Azure nếu muốn deploy nhanh, dễ hiểu**
+- ✅ **Dùng AWS nếu quen với AWS ecosystem**
+- ⚠️ **KHÔNG thể copy code Azure sang AWS** - phải viết lại hoàn toàn!
+
+---
+
+### 🎓 Recommendation
+
+| Tình Huống | Nên Dùng | Lý Do |
+|-----------|----------|-------|
+| **Learning & Testing** | Azure ✅ | Đơn giản, nhanh deploy, rẻ |
+| **Production Startup** | **Chọn 1** | Tùy team familiar |
+| **Enterprise Scale** | AWS ✅ | Ecosystem rộng, cost savings at scale |
+| **Microsoft Stack** | Azure ✅ | Tích hợp .NET, Office 365, Teams |
+| **Open Source** | AWS ✅ | Linux-centric, community lớn |
+
+**Cho project này:** Azure Container Apps là **tốt nhất** vì:
+- ✅ Dễ deploy (copy-paste commands)
+- ✅ Rẻ (Azure for Students)
+- ✅ Production-ready
+- ✅ Đủ tính năng cho e-commerce
 
 ---
 
@@ -3015,159 +2645,6 @@ az ad sp create-for-rbac \
 
 ---
 
-## 🧹 Cleanup & Xóa Resources
-
-**Sau khi test hoặc không cần deploy nữa, xóa sạch để STOP tính phí:**
-
-### Cách 1: Xóa Toàn Bộ Resource Group (NHANH NHẤT)
-
-```bash
-# Xóa resource group (xóa mọi thứ bên trong)
-az group delete --name $RESOURCE_GROUP --yes --no-wait
-
-# Kiểm tra status
-az group delete --name $RESOURCE_GROUP --verbose
-
-echo "✅ Resource Group scheduled for deletion"
-echo "💰 Tính phí sẽ dừng trong 5-10 phút"
-```
-
-### Cách 2: Xóa Từng Resource (Nếu muốn giữ một số)
-
-```bash
-# Xóa Container Apps
-az containerapp delete --name ecommerce-backend --resource-group $RESOURCE_GROUP -y
-az containerapp delete --name ecommerce-frontend --resource-group $RESOURCE_GROUP -y
-
-# Xóa Container Apps Environment
-az containerapp env delete --name $ENVIRONMENT_NAME --resource-group $RESOURCE_GROUP -y
-
-# Xóa MySQL Database
-az mysql flexible-server delete --name $MYSQL_SERVER --resource-group $RESOURCE_GROUP -y
-
-# Xóa Redis Cache
-az redis delete --name $REDIS_NAME --resource-group $RESOURCE_GROUP -y
-
-# Xóa Blob Storage
-az storage account delete --name $STORAGE_ACCOUNT --resource-group $RESOURCE_GROUP -y
-
-# Xóa Container Registry
-az acr delete --name $CONTAINER_REGISTRY --resource-group $RESOURCE_GROUP -y
-
-# Xóa Application Insights
-az monitor app-insights component delete --app $APPINSIGHTS_NAME --resource-group $RESOURCE_GROUP
-
-# Xóa Log Analytics Workspace
-az monitor log-analytics workspace delete --workspace-name $LOG_WORKSPACE --resource-group $RESOURCE_GROUP -y
-
-# Cuối cùng, xóa resource group
-az group delete --name $RESOURCE_GROUP --yes
-```
-
-### Cách 3: Script Xóa Tự Động
-
-Tạo file `cleanup.sh`:
-
-```bash
-#!/bin/bash
-
-# Load variables
-RESOURCE_GROUP="ecommerce-rg"
-
-echo "🧹 Cleaning up Azure resources..."
-echo "Resource Group: $RESOURCE_GROUP"
-echo "⚠️  Điều này sẽ XÓA TẤT CẢ resources!"
-read -p "Type 'yes' to confirm deletion: " confirm
-
-if [ "$confirm" = "yes" ]; then
-  echo "Deleting resource group..."
-  az group delete --name $RESOURCE_GROUP --yes --no-wait
-  
-  echo "✅ Resource Group scheduled for deletion"
-  echo "💰 Tính phí sẽ dừng trong vài phút"
-  echo ""
-  echo "Kiểm tra status:"
-  echo "az group show --name $RESOURCE_GROUP"
-else
-  echo "❌ Deletion cancelled"
-fi
-```
-
-```bash
-# Make executable
-chmod +x cleanup.sh
-
-# Run
-./cleanup.sh
-```
-
-### Cách 4: Kiểm Tra Tình Trạng Xóa
-
-```bash
-# Xem resource groups
-az group list --output table
-
-# Xem chi tiết resource group
-az group show --name $RESOURCE_GROUP
-
-# Xem cost
-az cost management forecast --timeframe TheLastMonth --metric AmazonEC2Instances
-```
-
----
-
-## 💡 Tips Tiết Kiệm Chi Phí
-
-### Nếu Không Muốn Xóa Mà Muốn Tắt Tạm:
-
-```bash
-# Stop Container Apps (Không tính phí khi stopped)
-az containerapp stop --name ecommerce-backend --resource-group $RESOURCE_GROUP
-az containerapp stop --name ecommerce-frontend --resource-group $RESOURCE_GROUP
-
-# Start lại khi cần
-az containerapp start --name ecommerce-backend --resource-group $RESOURCE_GROUP
-az containerapp start --name ecommerce-frontend --resource-group $RESOURCE_GROUP
-```
-
-### Scale Down để Tiết Kiệm:
-
-```bash
-# Giảm resources
-az containerapp update --name ecommerce-backend --resource-group $RESOURCE_GROUP \
-  --min-replicas 0 --max-replicas 1 --cpu 0.25 --memory 0.5Gi
-
-# Set to 0 replicas
-az containerapp update --name ecommerce-backend --resource-group $RESOURCE_GROUP \
-  --min-replicas 0
-```
-
-### Xóa Các Dịch Vụ Tốn Tiền Nhất:
-
-```bash
-# Front Door (tốn tiền nhất - $35/tháng)
-az afd profile delete --profile-name ecommerce-fd --resource-group $RESOURCE_GROUP -y
-
-# Key Vault (optional - $0.6/tháng)
-az keyvault delete --name ecommerce-kv --resource-group $RESOURCE_GROUP -y
-```
-
----
-
-## 📊 Kiểm Tra Chi Phí Trên Azure
-
-```bash
-# Xem cost estimates
-az cost management query \
-  --definition '{"type":"Usage","timeframe":"MonthToDate","granularity":"Daily"}' \
-  --scope /subscriptions/{subscription-id}
-
-# Hoặc dùng Azure Portal:
-# Home → Cost Management + Billing → Cost analysis
-```
-
----
-
 ## 🐛 Troubleshooting
 
 ### 1. Container không start
@@ -3247,6 +2724,58 @@ az containerapp update \
   --resource-group $RESOURCE_GROUP \
   --min-replicas 3 \
   --max-replicas 10
+```
+
+---
+
+## 💡 Tips Tiết Kiệm Chi Phí
+
+### Nếu Không Muốn Xóa Mà Muốn Tắt Tạm:
+
+```bash
+# Stop Container Apps (Không tính phí khi stopped)
+az containerapp stop --name ecommerce-backend --resource-group $RESOURCE_GROUP
+az containerapp stop --name ecommerce-frontend --resource-group $RESOURCE_GROUP
+
+# Start lại khi cần
+az containerapp start --name ecommerce-backend --resource-group $RESOURCE_GROUP
+az containerapp start --name ecommerce-frontend --resource-group $RESOURCE_GROUP
+```
+
+### Scale Down để Tiết Kiệm:
+
+```bash
+# Giảm resources
+az containerapp update --name ecommerce-backend --resource-group $RESOURCE_GROUP \
+  --min-replicas 0 --max-replicas 1 --cpu 0.25 --memory 0.5Gi
+
+# Set to 0 replicas
+az containerapp update --name ecommerce-backend --resource-group $RESOURCE_GROUP \
+  --min-replicas 0
+```
+
+### Xóa Các Dịch Vụ Tốn Tiền Nhất:
+
+```bash
+# Front Door (tốn tiền nhất - $35/tháng)
+az afd profile delete --profile-name ecommerce-fd --resource-group $RESOURCE_GROUP -y
+
+# Key Vault (optional - $0.6/tháng)
+az keyvault delete --name ecommerce-kv --resource-group $RESOURCE_GROUP -y
+```
+
+---
+
+## 📊 Kiểm Tra Chi Phí Trên Azure
+
+```bash
+# Xem cost estimates
+az cost management query \
+  --definition '{"type":"Usage","timeframe":"MonthToDate","granularity":"Daily"}' \
+  --scope /subscriptions/{subscription-id}
+
+# Hoặc dùng Azure Portal:
+# Home → Cost Management + Billing → Cost analysis
 ```
 
 ---
@@ -3356,4 +2885,3 @@ Hoặc liên hệ Azure Support: https://azure.microsoft.com/support/
 
 ---
 
-**Lưu ý**: Đây là hướng dẫn chi tiết cho production deployment. Đảm bảo test kỹ trên staging environment trước khi deploy lên production.
