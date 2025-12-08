@@ -1,18 +1,17 @@
 # Hướng Dẫn Deploy E-Commerce Platform Lên Azure
 
 ## 📋 Mục Lục
-1. [⚡ QUICK TEST MODE (15 phút)](#quick-test-mode-15-phút) ← **BẮT ĐẦU TỪ ĐÂY**
-2. [🔄 So Sánh Azure ↔ AWS](#so-sánh-azure--aws) ← **Nếu bạn dùng AWS**
-3. [Tổng Quan Kiến Trúc](#tổng-quan-kiến-trúc)
-4. [Yêu Cầu Trước Khi Deploy](#yêu-cầu-trước-khi-deploy)
-5. [Phương Pháp 1: Deploy với Azure Container Apps (Khuyến nghị)](#phương-pháp-1-deploy-với-azure-container-apps)
-6. [Phương Pháp 2: Deploy với Azure App Service](#phương-pháp-2-deploy-với-azure-app-service)
-7. [Phương Pháp 3: Deploy với Azure Kubernetes Service (AKS)](#phương-pháp-3-deploy-với-azure-kubernetes-service)
-8. [Cấu Hình Dịch Vụ Bổ Sung](#cấu-hình-dịch-vụ-bổ-sung)
-9. [Monitoring và Bảo Mật](#monitoring-và-bảo-mật)
-10. [CI/CD Pipeline](#cicd-pipeline)
-11. [Troubleshooting](#troubleshooting)
-12. [Cleanup & Xóa Resources](#cleanup--xóa-resources)
+1. [⚡ QUICK TEST MODE (15 phút)](#-ultra-quick-production-test-5-10-phút) ← **BẮT ĐẦU TỪ ĐÂY**
+2. [🔄 So Sánh Azure ↔ AWS](#-so-sánh-azure--aws) ← **Nếu bạn dùng AWS**
+3. [📍 Hướng Dẫn: Thao Tác Trên Đâu?](#-hướng-dẫn-thao-tác-trên-đâu-local-vs-cloud) ← **Quan Trọng!**
+4. [🏗️ Tổng Quan Kiến Trúc](#-tổng-quan-kiến-trúc)
+5. [📦 Yêu Cầu Trước Khi Deploy](#-yêu-cầu-trước-khi-deploy)
+6. [🚀 Phương Pháp 1: Azure Container Apps](#-phương-pháp-1-deploy-với-azure-container-apps)
+7. [🏢 Phương Pháp 2: Azure App Service](#-phương-pháp-2-deploy-với-azure-app-service)
+8. [☸️ Phương Pháp 3: Azure Kubernetes (AKS)](#-phương-pháp-3-deploy-với-azure-kubernetes-service)
+9. [⏰ Thời Gian & Chi Phí](#-thời-gian--chi-phí-chi-tiết)
+10. [📚 Giải Thích Chi Tiết Từng Bước](#-giải-thích-chi-tiết-từng-bước)
+11. [🎯 Tóm Tắt Process](#-tóm-tắt-process)
 
 ---
 
