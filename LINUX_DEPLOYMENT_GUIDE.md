@@ -737,13 +737,7 @@ sudo nano /etc/supervisor/conf.d/ecommerce-backend.conf
 # Add content:
 [program:ecommerce-backend]
 directory=/var/www/backend
-command=/var/www/backend/venv/bin/gunicorn \
-    --workers 4 \
-    --worker-class sync \
-    --bind 127.0.0.1:8000 \
-    --access-logfile /var/log/ecommerce-backend-access.log \
-    --error-logfile /var/log/ecommerce-backend-error.log \
-    backend.wsgi:application
+command=/var/www/backend/venv/bin/gunicorn --workers 4 --worker-class sync --bind 127.0.0.1:8000 --access-logfile /var/log/ecommerce-backend-access.log --error-logfile /var/log/ecommerce-backend-error.log backend.wsgi:application
 user=azureuser
 autostart=true
 autorestart=true
@@ -751,11 +745,9 @@ stopwaitsecs=10
 numprocs=1
 priority=999
 startsecs=10
-
-# Log files
+# Add log:
 stdout_logfile=/var/log/ecommerce-backend-stdout.log
 stderr_logfile=/var/log/ecommerce-backend-stderr.log
-
 # Ctrl+X → Y → Enter
 
 # Reread supervisor
