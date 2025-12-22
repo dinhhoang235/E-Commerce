@@ -346,8 +346,6 @@ sudo ufw status
 ```bash
 # Tạo thư mục chứa apps
 sudo mkdir -p /var/www
-sudo mkdir -p /var/www/backend
-sudo mkdir -p /var/www/frontend
 
 # Set permissions
 sudo chown -R azureuser:azureuser /var/www
@@ -356,10 +354,8 @@ chmod -R 755 /var/www
 # Verify
 ls -la /var/www
 # Output:
-# drwxr-xr-x  4 azureuser azureuser 4096 Dec 16 10:00 .
+# drwxr-xr-x  2 azureuser azureuser 4096 Dec 16 10:00 .
 # drwxr-xr-x 13 root      root      4096 Dec 16 09:55 ..
-# drwxr-xr-x  2 azureuser azureuser 4096 Dec 16 10:00 backend
-# drwxr-xr-x  2 azureuser azureuser 4096 Dec 16 10:00 frontend
 ```
 
 ✅ **Directories created!**
@@ -385,23 +381,11 @@ sudo apt install -y python3.11 python3.11-venv python3.11-dev
 # Check version
 python3.11 --version
 # Output: Python 3.11.X
-
-# Create virtual environment
-cd /var/www/backend
-python3.11 -m venv venv
-
-# Activate venv
-source venv/bin/activate
-
-# Upgrade pip
-pip install --upgrade pip setuptools wheel
-
-# Verify
-python --version
-pip --version
 ```
 
 ✅ **Python 3.11 installed!**
+
+> **Note**: Virtual environment sẽ được tạo sau khi clone repository ở BƯỚC 4.2
 
 > **Note**: Nếu gặp lỗi `pkg-config: not found` khi `pip install -r requirements.txt`, chạy:
 > ```bash
@@ -535,31 +519,56 @@ certbot --version
 
 ## BƯỚC 4: Deploy Backend (Django + Gunicorn)
 
-### 4.1 Clone Repository
+### 4.1 Clone Repository (Monorepo với Symlink)
+
+> **Note**: Vì repo chứa cả backend + frontend (monorepo), ta sẽ clone vào `/opt/E-Commerce` và tạo symlink
 
 ```bash
-cd /var/www/backend
+# Clone toàn bộ repo vào /opt/E-Commerce
+cd /opt
+sudo git clone https://github.com/dinhhoang235/E-Commerce.git
+sudo chown -R azureuser:azureuser /opt/E-Commerce
 
-# Clone (hoặc upload via Git)
-git clone https://github.com/dinhhoang235/E-Commerce.git . || \
-  scp -r /Users/hoang/Documents/code/E-Commerce/backend/* azureuser@20.195.xxx.xxx:/var/www/backend/
+# Tạo symlink cho backend và frontend
+sudo ln -s /opt/E-Commerce/backend /var/www/backend
+sudo ln -s /opt/E-Commerce/frontend /var/www/frontend
 
-# Verify
+# Verify symlinks
+ls -la /var/www/
+# Output:
+# lrwxrwxrwx  1 root root   27 Dec 22 10:00 backend -> /opt/E-Commerce/backend
+# lrwxrwxrwx  1 root root   28 Dec 22 10:00 frontend -> /opt/E-Commerce/frontend
+
+# Verify backend files
 ls -la /var/www/backend
 # Output:
-# drwxr-xr-x  manage.py
-# drwxr-xr-x  requirements.txt
-# drwxr-xr-x  entrypoint.sh
+# -rw-r--r--  manage.py
+# -rw-r--r--  requirements.txt
+# -rwxr-xr-x  entrypoint.sh
 # ...
 ```
+
+✅ **Repository cloned & symlinks created!**
+
+> **Lợi ích của cách này:**
+> - ✅ Clone 1 lần, dùng cho cả backend + frontend
+> - ✅ Update code dễ dàng: `cd /opt/E-Commerce && git pull`
+> - ✅ Quản lý version tập trung
+> - ✅ Dễ rollback nếu cần
 
 ### 4.2 Install Python Dependencies
 
 ```bash
 cd /var/www/backend
 
+# Create virtual environment (vì backend là symlink từ /opt/E-Commerce/backend)
+python3.11 -m venv venv
+
 # Activate virtual environment
 source venv/bin/activate
+
+# Upgrade pip
+pip install --upgrade pip setuptools wheel
 
 # Install from requirements.txt
 pip install -r requirements.txt
@@ -771,23 +780,25 @@ sudo tail -f /var/log/ecommerce-backend-error.log
 
 ## BƯỚC 5: Deploy Frontend (Next.js)
 
-### 5.1 Clone Repository
+### 5.1 Verify Frontend Symlink
+
+> **Note**: Frontend đã được symlink từ BƯỚC 4.1, không cần clone lại
 
 ```bash
-cd /var/www/frontend
-
-# Clone hoặc upload
-git clone https://github.com/dinhhoang235/E-Commerce.git . || \
-  scp -r /Users/hoang/Documents/code/E-Commerce/frontend/* azureuser@20.195.xxx.xxx:/var/www/frontend/
-
-# Verify
+# Verify symlink
 ls -la /var/www/frontend
+# Output: lrwxrwxrwx -> /opt/E-Commerce/frontend
+
+# Verify files
+ls -la /var/www/frontend/
 # Output:
 # -rw-r--r--  package.json
 # -rw-r--r--  next.config.ts
 # drwxr-xr-x  src
 # ...
 ```
+
+✅ **Frontend symlink verified!**
 
 ### 5.2 Install Node Dependencies
 
@@ -1295,7 +1306,55 @@ sudo systemctl status redis-server
 - ✅ Nginx → auto-restart on reboot
 - ✅ MySQL → auto-restart on reboot
 
-### 11.2 Test Auto-restart
+### 11.2 Update Code từ Git (Production Workflow)
+
+```bash
+# Khi có code mới trên GitHub, update như sau:
+
+# 1. Pull code mới từ GitHub
+cd /opt/E-Commerce
+git pull origin main
+
+# 2. Update backend dependencies (nếu có thay đổi requirements.txt)
+cd /var/www/backend
+source venv/bin/activate
+pip install -r requirements.txt
+
+# 3. Run migrations (nếu có thay đổi models)
+python manage.py migrate
+
+# 4. Collect static files (nếu có thay đổi static)
+python manage.py collectstatic --noinput
+
+# 5. Restart backend
+sudo supervisorctl restart ecommerce-backend
+
+# 6. Update frontend dependencies (nếu có thay đổi package.json)
+cd /var/www/frontend
+npm install
+
+# 7. Rebuild frontend
+npm run build
+
+# 8. Restart frontend
+pm2 restart ecommerce-frontend
+
+# 9. Check logs
+sudo tail -f /var/log/ecommerce-backend-error.log
+pm2 logs ecommerce-frontend --lines 50
+```
+
+✅ **Code updated & deployed!**
+
+> **💡 Tip**: Tạo deployment script để tự động hóa:
+> ```bash
+> nano ~/deploy.sh
+> # Paste nội dung trên vào file
+> chmod +x ~/deploy.sh
+> # Lần sau chỉ cần: ~/deploy.sh
+> ```
+
+### 11.3 Test Auto-restart
 
 ```bash
 # Kill backend process
@@ -1319,7 +1378,7 @@ pm2 status
 
 ## 🧪 Final Testing
 
-### 11.3 Test Full Stack
+### 11.4 Test Full Stack
 
 ```bash
 # Test Frontend
@@ -1332,7 +1391,7 @@ curl http://20.195.xxx.xxx/api/products/
 curl http://20.195.xxx.xxx/admin/
 
 # Test Database
-mysql -u ecommerce_user -p ecommerce_db -e "SELECT COUNT(*) FROM products_product;"
+mysql -u admin -p e_commerce -e "SELECT COUNT(*) FROM products_product;"
 
 # Test Blob Storage (upload file via API and check in Azure)
 # ... depends on implementation
