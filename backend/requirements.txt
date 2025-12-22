@@ -11,3 +11,4 @@ uvicorn[standard]==0.30.6
 gunicorn==22.0.0
 redis==5.0.1
 django-redis==5.4.0
+hiredis==2.3.2

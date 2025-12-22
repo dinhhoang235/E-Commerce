@@ -597,15 +597,15 @@ ALLOWED_HOSTS=localhost,127.0.0.1,20.195.xxx.xxx,example.com
 DB_ENGINE=django.db.backends.mysql
 DB_NAME=e_commerce
 DB_USER=admin
-DB_PASSWORD=admin123
+DB_PASSWORD=Admin123@
 DB_HOST=localhost
 DB_PORT=3306
 
 # Database Configuration
-MYSQL_ROOT_PASSWORD=admin123
+MYSQL_ROOT_PASSWORD=Admin123@
 MYSQL_DATABASE=e_commerce
 MYSQL_USER=admin
-MYSQL_PASSWORD=admin123
+MYSQL_PASSWORD=Admin123@
 
 # Redis Configuration 
 REDIS_HOST=localhost
@@ -653,7 +653,7 @@ mysql -u root -p
 
 # In MySQL shell:
 CREATE DATABASE e_commerce CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'admin'@'localhost' IDENTIFIED BY 'admin123';
+CREATE USER 'admin'@'localhost' IDENTIFIED BY 'Admin123@';
 GRANT ALL PRIVILEGES ON e_commerce.* TO 'admin'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
