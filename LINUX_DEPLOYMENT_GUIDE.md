@@ -376,6 +376,9 @@ sudo apt install -y software-properties-common
 sudo add-apt-repository ppa:deadsnakes/ppa -y
 sudo apt update
 
+# ⚠️ IMPORTANT: Cài MySQL development headers (cho mysqlclient)
+sudo apt install -y pkg-config default-libmysqlclient-dev
+
 # Cài Python 3.11
 sudo apt install -y python3.11 python3.11-venv python3.11-dev
 
@@ -399,6 +402,12 @@ pip --version
 ```
 
 ✅ **Python 3.11 installed!**
+
+> **Note**: Nếu gặp lỗi `pkg-config: not found` khi `pip install -r requirements.txt`, chạy:
+> ```bash
+> sudo apt install -y pkg-config default-libmysqlclient-dev
+> pip install -r requirements.txt
+> ```
 
 ### 3.2 Cài Node.js 22
 
@@ -569,29 +578,53 @@ pip list | grep -E "Django|gunicorn|redis"
 
 ✅ **Backend dependencies installed!**
 
-### 4.3 Setup Environment Variables
+### 4.3 Setup Environment Variables (Backend)
+
+> **Note**: Vì bạn dùng **Monorepo**, tạo 2 file riêng:
+> - `/var/www/backend/.env` (Django)
+> - `/var/www/frontend/.env.local` (Next.js)
 
 ```bash
-# Create .env file
+# Create .env file for backend
 nano /var/www/backend/.env
 
-# Add content:
+# Add content 
 DEBUG=False
-SECRET_KEY=your-super-secret-key-min-50-chars-django-will-not-start-without-this-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+SECRET_KEY=...
 ALLOWED_HOSTS=localhost,127.0.0.1,20.195.xxx.xxx,example.com
 
-# Database (local MySQL)
+# Database setting
 DB_ENGINE=django.db.backends.mysql
-DB_NAME=ecommerce_db
-DB_USER=ecommerce_user
-DB_PASSWORD=YourSecurePassword123!@#
+DB_NAME=e_commerce
+DB_USER=admin
+DB_PASSWORD=admin123
 DB_HOST=localhost
 DB_PORT=3306
 
-# Redis (local)
+# Database Configuration
+MYSQL_ROOT_PASSWORD=admin123
+MYSQL_DATABASE=e_commerce
+MYSQL_USER=admin
+MYSQL_PASSWORD=admin123
+
+# Redis Configuration 
 REDIS_HOST=localhost
 REDIS_PORT=6379
-REDIS_PASSWORD=your_redis_password
+REDIS_DB=0
+
+# Backend Configuration
+DJANGO_PORT=8000
+
+# Frontend Configuration
+NEXT_PUBLIC_API_URL=http://localhost/api
+NEXT_PUBLIC_WS_HOST=localhost
+FRONTEND_URL=http://localhost
+
+# Payment Key (Stripe - sẽ config sau)
+STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key_here
+STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key_here
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key_here
+STRIPE_WEBHOOK_SECRET=whsec_test_your_webhook_secret_here
 
 # Azure Blob Storage (sẽ config ở BƯỚC 9)
 AZURE_STORAGE_ACCOUNT_NAME=yourstorageaccount
@@ -601,6 +634,13 @@ AZURE_CUSTOM_DOMAIN=yourstorageaccount.blob.core.windows.net
 
 # Ctrl+X → Y → Enter để save
 ```
+
+⚠️ **QUAN TRỌNG**:
+
+- Thay `DB_PASSWORD` từ `admin123` → **strong password** cho production
+- Thay `STRIPE_SECRET_KEY` → real Stripe keys
+- Thay `20.195.xxx.xxx` → public IP của VM bạn
+- Nếu có domain, thay `example.com` vào `ALLOWED_HOSTS`
 
 ✅ **.env file created!**
 
@@ -612,14 +652,14 @@ mysql -u root -p
 # Enter password (từ mysql_secure_installation)
 
 # In MySQL shell:
-CREATE DATABASE ecommerce_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'ecommerce_user'@'localhost' IDENTIFIED BY 'YourSecurePassword123!@#';
-GRANT ALL PRIVILEGES ON ecommerce_db.* TO 'ecommerce_user'@'localhost';
+CREATE DATABASE e_commerce CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'admin'@'localhost' IDENTIFIED BY 'admin123';
+GRANT ALL PRIVILEGES ON e_commerce.* TO 'admin'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
 
 # Verify
-mysql -u ecommerce_user -p -D ecommerce_db -e "SELECT 1"
+mysql -u admin -p -D e_commerce -e "SELECT 1"
 # Output: 1 (connection OK)
 ```
 
@@ -767,19 +807,25 @@ npm list next
 
 ✅ **Frontend dependencies installed!**
 
-### 5.3 Setup .env.local
+### 5.3 Setup Environment Variables (Frontend)
 
 ```bash
-# Create environment file
+# Create .env.local file for frontend
 nano /var/www/frontend/.env.local
 
-# Add content:
-NEXT_PUBLIC_API_URL=http://localhost:8000
-# Hoặc production:
-# NEXT_PUBLIC_API_URL=https://example.com
+# Add content (only NEXT_PUBLIC_* variables):
+NEXT_PUBLIC_API_URL=http://localhost/api
+NEXT_PUBLIC_WS_HOST=localhost
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key_here
 
 # Ctrl+X → Y → Enter
 ```
+
+✅ **.env.local file created!**
+
+> **Note**: Next.js chỉ access variables có prefix `NEXT_PUBLIC_`, nên không cần `SECRET_KEY`, `DB_PASSWORD`, v.v.
+> 
+> Các secret keys (Stripe Secret, DB Password) **chỉ ở backend .env**
 
 ### 5.4 Build Next.js
 
@@ -1330,7 +1376,11 @@ sudo systemctl status mysql
 mysql -u ecommerce_user -p ecommerce_db -e "SELECT 1"
 
 # Check .env file
-cat /var/www/backend/.env | grep DB_
+cat /var/www/backend/.env | grep -E "DB_|REDIS_"
+
+# Test MySQL connection
+mysql -u admin -p e_commerce -e "SELECT 1"
+# Output: 1 (connection OK)
 
 # Check Supervisor logs
 sudo tail -f /var/log/ecommerce-backend-error.log
