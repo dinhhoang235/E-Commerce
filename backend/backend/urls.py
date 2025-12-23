@@ -23,7 +23,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from users.views import UserRegistrationView, CustomTokenObtainPairView, CheckUsernameAvailabilityView, CheckEmailAvailabilityView
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path('django-admin/', admin.site.urls),  # Changed from 'admin/' to avoid conflict with Next.js admin
     path('api/', include(router.urls)),
     path('api/register/', UserRegistrationView.as_view(), name='user_register'),
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),  # login
