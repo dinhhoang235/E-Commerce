@@ -21,7 +21,8 @@ interface Product {
   id: string | number
   name: string
   description: string
-  price: number
+  min_price: number
+  max_price: number
   originalPrice?: number
   image?: string
   category: string | Category

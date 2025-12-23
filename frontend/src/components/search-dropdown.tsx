@@ -19,7 +19,8 @@ interface Product {
   id: string | number
   name: string
   description: string
-  price: number
+  min_price: number
+  max_price: number
   originalPrice?: number
   image?: string
   category: string | { name: string; slug: string }
@@ -175,9 +176,12 @@ export function SearchDropdown({ query, isOpen, onClose, onSelect }: SearchDropd
                   <div className="flex items-center justify-between pt-1">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-slate-900 text-base">
-                        ${Number(product.price).toFixed(2)}
+                        ${Number(product.min_price).toFixed(2)}
+                        {product.max_price > product.min_price && (
+                          <span className="text-slate-600"> - ${Number(product.max_price).toFixed(2)}</span>
+                        )}
                       </span>
-                      {product.originalPrice && Number(product.originalPrice) > Number(product.price) && (
+                      {product.originalPrice && Number(product.originalPrice) > Number(product.min_price) && (
                         <span className="text-xs text-slate-400 line-through">
                           ${Number(product.originalPrice).toFixed(2)}
                         </span>
