@@ -2624,7 +2624,672 @@ docker compose up -d
 
 ---
 
-## 📊 Summary: Deployment Options
+## � BƯỚC 13: Setup CI/CD với GitHub Actions (Auto Deploy)
+
+> **Khi nào dùng**: Sau khi deploy manual/Docker thành công, muốn tự động deploy mỗi khi push code
+> 
+> **Lợi ích**: Push code → Auto test → Auto deploy → Zero downtime
+> 
+> **⏱️ Thời gian**: ~30 phút setup → Deploy chỉ 5-10 phút mỗi lần
+
+### 13.1 Overview: CI/CD Pipeline
+
+```
+Developer                GitHub Actions              Azure VM
+    ↓                          ↓                         ↓
+git push main          →  Workflow triggered     →  SSH vào VM
+                           ↓                          ↓
+                       Run tests                  Pull code
+                           ↓                          ↓
+                       Build (if needed)          Restart services
+                           ↓                          ↓
+                       Deploy to VM               Live!
+                           ↓
+                       Send notification
+```
+
+### 13.2 Prerequisites
+
+Trước khi setup CI/CD, cần có:
+
+```bash
+✅ VM đã deploy thành công (Traditional hoặc Docker)
+✅ GitHub repository với code
+✅ SSH access vào VM
+✅ GitHub account với repository admin access
+```
+
+### 13.3 Setup SSH Key cho GitHub Actions
+
+#### Bước 1: Tạo SSH Key trên Local
+
+```bash
+# Tạo SSH key riêng cho GitHub Actions (không dùng key cá nhân)
+ssh-keygen -t rsa -b 4096 -C "github-actions" -f ~/.ssh/github-actions -N ""
+
+# Output:
+# ~/.ssh/github-actions (private key)
+# ~/.ssh/github-actions.pub (public key)
+
+# View private key (sẽ add vào GitHub Secrets)
+cat ~/.ssh/github-actions
+# Output:
+# -----BEGIN OPENSSH PRIVATE KEY-----
+# b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAACFwAAAA...
+# -----END OPENSSH PRIVATE KEY-----
+
+# View public key (sẽ add vào VM)
+cat ~/.ssh/github-actions.pub
+# Output:
+# ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC... github-actions
+```
+
+✅ **SSH key generated!**
+
+#### Bước 2: Add Public Key vào VM
+
+```bash
+# SSH vào VM
+ssh azureuser@20.2.82.70
+
+# Add public key vào authorized_keys
+echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC... github-actions" >> ~/.ssh/authorized_keys
+
+# Set permissions
+chmod 600 ~/.ssh/authorized_keys
+chmod 700 ~/.ssh
+
+# Test từ local
+ssh -i ~/.ssh/github-actions azureuser@20.2.82.70 "echo 'SSH OK'"
+# Output: SSH OK
+```
+
+✅ **Public key added to VM!**
+
+### 13.4 Setup GitHub Secrets
+
+#### Bước 1: Copy Private Key
+
+```bash
+# Copy toàn bộ private key (bao gồm BEGIN và END)
+cat ~/.ssh/github-actions
+# Copy output vào clipboard
+```
+
+#### Bước 2: Add Secrets vào GitHub
+
+```
+1. Mở GitHub repository: https://github.com/dinhhoang235/E-Commerce
+2. Click "Settings" → "Secrets and variables" → "Actions"
+3. Click "New repository secret"
+
+Tạo các secrets sau:
+
+Secret 1:
+- Name: SSH_PRIVATE_KEY
+- Value: (paste private key từ bước 1)
+
+Secret 2:
+- Name: SSH_HOST
+- Value: 20.2.82.70
+
+Secret 3:
+- Name: SSH_USER
+- Value: azureuser
+
+Secret 4:
+- Name: SSH_PORT
+- Value: 22
+```
+
+✅ **GitHub Secrets configured!**
+
+### 13.5 Create GitHub Actions Workflow
+
+#### Option A: CI/CD cho Traditional Deployment
+
+```bash
+# Ở local machine
+cd /path/to/E-Commerce
+
+# Tạo workflow directory
+mkdir -p .github/workflows
+
+# Tạo workflow file
+cat > .github/workflows/deploy-traditional.yml << 'EOF'
+name: Deploy Traditional (Manual)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to VM
+        run: |
+          ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'ENDSSH'
+            set -e
+            
+            echo "🚀 Starting deployment..."
+            
+            # Pull latest code
+            cd /opt/E-Commerce
+            git pull origin main
+            
+            # Backend deployment
+            echo "📦 Updating backend..."
+            cd /var/www/backend
+            source venv/bin/activate
+            pip install -r requirements.txt
+            python manage.py migrate --noinput
+            python manage.py collectstatic --noinput
+            deactivate
+            
+            # Restart backend
+            sudo supervisorctl restart ecommerce-backend
+            echo "✅ Backend restarted"
+            
+            # Frontend deployment
+            echo "📦 Updating frontend..."
+            cd /var/www/frontend
+            npm install
+            npm run build
+            
+            # Restart frontend
+            pm2 restart ecommerce-frontend
+            echo "✅ Frontend restarted"
+            
+            # Verify services
+            sleep 5
+            sudo supervisorctl status ecommerce-backend
+            pm2 status ecommerce-frontend
+            
+            echo "🎉 Deployment completed successfully!"
+          ENDSSH
+
+      - name: Verify deployment
+        run: |
+          sleep 10
+          curl -f http://${{ secrets.SSH_HOST }}/api/products/ || exit 1
+          echo "✅ API is responding"
+
+      - name: Notify on success
+        if: success()
+        run: echo "✅ Deployment successful!"
+
+      - name: Notify on failure
+        if: failure()
+        run: echo "❌ Deployment failed!"
+EOF
+```
+
+✅ **Traditional workflow created!**
+
+#### Option B: CI/CD cho Docker Deployment
+
+```bash
+# Tạo workflow cho Docker
+cat > .github/workflows/deploy-docker.yml << 'EOF'
+name: Deploy Docker
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to VM with Docker
+        run: |
+          ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'ENDSSH'
+            set -e
+            
+            echo "🚀 Starting Docker deployment..."
+            
+            # Pull latest code
+            cd /opt/E-Commerce
+            git pull origin main
+            
+            # Rebuild and restart containers
+            echo "🐳 Rebuilding Docker images..."
+            docker compose build
+            
+            echo "🔄 Restarting containers..."
+            docker compose up -d
+            
+            # Run migrations
+            echo "📊 Running migrations..."
+            docker compose exec -T backend python manage.py migrate --noinput
+            
+            # Collect static files
+            echo "📦 Collecting static files..."
+            docker compose exec -T backend python manage.py collectstatic --noinput
+            
+            # Verify services
+            echo "🔍 Verifying services..."
+            docker compose ps
+            
+            echo "🎉 Docker deployment completed successfully!"
+          ENDSSH
+
+      - name: Verify deployment
+        run: |
+          sleep 15
+          curl -f http://${{ secrets.SSH_HOST }}/api/products/ || exit 1
+          echo "✅ API is responding"
+
+      - name: Notify on success
+        if: success()
+        run: echo "✅ Deployment successful!"
+
+      - name: Notify on failure
+        if: failure()
+        run: echo "❌ Deployment failed!"
+EOF
+```
+
+✅ **Docker workflow created!**
+
+### 13.6 Advanced Workflow với Tests & Notifications
+
+```bash
+# Workflow với testing và Slack notification
+cat > .github/workflows/deploy-advanced.yml << 'EOF'
+name: Deploy with Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+
+      - name: Run Django tests
+        run: |
+          cd backend
+          python manage.py test
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Run frontend tests
+        run: |
+          cd frontend
+          npm run lint
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to VM
+        run: |
+          ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'ENDSSH'
+            set -e
+            cd /opt/E-Commerce
+            git pull origin main
+            
+            # Docker deployment
+            docker compose build
+            docker compose up -d
+            docker compose exec -T backend python manage.py migrate --noinput
+            docker compose exec -T backend python manage.py collectstatic --noinput
+          ENDSSH
+
+      - name: Verify deployment
+        run: |
+          sleep 15
+          curl -f http://${{ secrets.SSH_HOST }}/api/products/
+
+      # Optional: Slack notification
+      # - name: Notify Slack
+      #   if: always()
+      #   uses: 8398a7/action-slack@v3
+      #   with:
+      #     status: ${{ job.status }}
+      #     webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+EOF
+```
+
+✅ **Advanced workflow created!**
+
+### 13.7 Commit và Push Workflows
+
+```bash
+# Add workflows to git
+git add .github/workflows/
+
+# Commit
+git commit -m "Add GitHub Actions CI/CD workflows"
+
+# Push to trigger first deployment
+git push origin main
+```
+
+✅ **Workflows pushed to GitHub!**
+
+### 13.8 Monitor Deployment
+
+```
+1. Mở GitHub repository
+2. Click tab "Actions"
+3. Xem workflow đang chạy
+
+Output sẽ như:
+┌─────────────────────────────────────┐
+│ ✅ Checkout code                    │
+│ ✅ Setup SSH                        │
+│ ⏳ Deploy to VM (running...)        │
+│    └─ 🚀 Starting deployment...     │
+│    └─ 📦 Updating backend...        │
+│    └─ ✅ Backend restarted          │
+│    └─ 📦 Updating frontend...       │
+│    └─ ✅ Frontend restarted         │
+│ ✅ Verify deployment                │
+│ ✅ Notify on success                │
+└─────────────────────────────────────┘
+```
+
+### 13.9 Test CI/CD Pipeline
+
+```bash
+# Make a small change
+echo "# CI/CD Test" >> README.md
+
+# Commit and push
+git add README.md
+git commit -m "Test CI/CD pipeline"
+git push origin main
+
+# Check GitHub Actions tab
+# → Workflow should trigger automatically
+# → Deploy to VM
+# → Verify with curl
+
+# After ~5-10 minutes, check VM
+ssh azureuser@20.2.82.70
+cd /opt/E-Commerce
+git log -1  # Should see latest commit
+```
+
+✅ **CI/CD pipeline tested!**
+
+### 13.10 Troubleshooting CI/CD
+
+#### Workflow fails at SSH step
+
+```bash
+# Check SSH key permissions on GitHub Secrets
+# Ensure private key includes:
+# -----BEGIN OPENSSH PRIVATE KEY-----
+# ...
+# -----END OPENSSH PRIVATE KEY-----
+
+# Test SSH manually
+ssh -i ~/.ssh/github-actions azureuser@20.2.82.70
+```
+
+#### Workflow fails at git pull
+
+```bash
+# SSH vào VM, check git config
+cd /opt/E-Commerce
+git config --global --add safe.directory /opt/E-Commerce
+
+# Ensure permissions
+sudo chown -R azureuser:azureuser /opt/E-Commerce
+```
+
+#### Workflow fails at Docker build
+
+```bash
+# Check Docker permissions
+ssh azureuser@20.2.82.70
+docker ps  # Should work without sudo
+
+# If not, add user to docker group
+sudo usermod -aG docker azureuser
+# Logout and login again
+```
+
+#### Services not restarting
+
+```bash
+# Check Supervisor/PM2 status
+ssh azureuser@20.2.82.70
+
+# Traditional:
+sudo supervisorctl status
+pm2 status
+
+# Docker:
+docker compose ps
+```
+
+### 13.11 Advanced CI/CD Features
+
+#### A. Deployment with Rollback
+
+```yaml
+# Add to workflow
+- name: Backup before deploy
+  run: |
+    ssh ... << 'ENDSSH'
+      cd /opt/E-Commerce
+      git tag backup-$(date +%Y%m%d-%H%M%S)
+      git push --tags
+    ENDSSH
+
+- name: Rollback on failure
+  if: failure()
+  run: |
+    ssh ... << 'ENDSSH'
+      cd /opt/E-Commerce
+      LATEST_TAG=$(git describe --tags --abbrev=0)
+      git checkout $LATEST_TAG
+      docker compose up -d
+    ENDSSH
+```
+
+#### B. Deployment with Health Checks
+
+```yaml
+- name: Health check
+  run: |
+    for i in {1..30}; do
+      if curl -f http://${{ secrets.SSH_HOST }}/api/health/; then
+        echo "✅ Health check passed"
+        exit 0
+      fi
+      echo "⏳ Waiting for service... ($i/30)"
+      sleep 10
+    done
+    echo "❌ Health check failed"
+    exit 1
+```
+
+#### C. Deployment với Environment Variables
+
+```yaml
+# Add to GitHub Secrets:
+# - DJANGO_SECRET_KEY
+# - STRIPE_SECRET_KEY
+# - DB_PASSWORD
+
+- name: Update environment variables
+  run: |
+    ssh ... << 'ENDSSH'
+      cd /opt/E-Commerce
+      cat > backend/.env << EOF
+      SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}
+      STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
+      DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+      EOF
+    ENDSSH
+```
+
+### 13.12 Best Practices CI/CD
+
+✅ **Security**
+```yaml
+# Never commit secrets to git
+# Always use GitHub Secrets
+# Rotate SSH keys regularly
+# Use deploy keys instead of personal keys
+```
+
+✅ **Testing**
+```yaml
+# Always run tests before deploy
+# Use separate staging environment
+# Deploy to staging first, then production
+```
+
+✅ **Monitoring**
+```yaml
+# Add health checks
+# Send notifications (Slack, Discord)
+# Log deployment history
+# Track deployment metrics
+```
+
+✅ **Rollback Strategy**
+```yaml
+# Keep backup of last working version
+# Tag releases with git tags
+# Quick rollback mechanism
+# Database migration rollback plan
+```
+
+### 13.13 Example: Full Production Workflow
+
+```yaml
+name: Production Deploy
+
+on:
+  push:
+    tags:
+      - 'v*'  # Deploy only on version tags
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run tests
+        run: # ... test commands
+
+  deploy-staging:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to staging
+        run: # ... deploy to staging VM
+
+  manual-approval:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for approval
+        uses: trstringer/manual-approval@v1
+        with:
+          approvers: dinhhoang235
+          minimum-approvals: 1
+
+  deploy-production:
+    needs: manual-approval
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to production
+        run: # ... deploy to production VM
+      
+      - name: Send notification
+        run: # ... notify team
+```
+
+### 13.14 Monitoring & Metrics
+
+```bash
+# Track deployment frequency
+# View in GitHub Actions tab → Insights
+
+# Metrics to monitor:
+- Deployment frequency (daily/weekly)
+- Deployment success rate (%)
+- Mean time to deploy (minutes)
+- Rollback frequency
+- Downtime during deployment
+```
+
+---
+
+## �📊 Summary: Deployment Options
 
 Bạn có **3 cách deploy**:
 
