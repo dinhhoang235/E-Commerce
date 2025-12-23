@@ -1827,131 +1827,845 @@ VM (Ubuntu 22.04) + Docker Engine
 
 ---
 
-### Cách Chuyển từ Traditional → Docker
+## 🐳 BƯỚC 12: Deploy với Docker (Alternative Approach)
 
-Nếu bạn theo guide Traditional hiện tại, sau này có thể dễ dàng chuyển sang Docker:
+> **Khi nào dùng**: Sau khi setup manual thành công, muốn deploy nhanh hơn cho lần sau hoặc môi trường khác
+> 
+> **Lợi ích**: Setup ở local, push lên Git, chỉ cần `git pull && docker-compose up` trên VM
+> 
+> **⏱️ Thời gian**: ~30 phút setup local + 10 phút deploy trên VM
 
-**Step 1: Tạo Dockerfile cho Backend**
+### 12.1 Chuẩn Bị Files Docker ở Local
 
-```dockerfile
-# backend/Dockerfile
+#### Bước 1: Tạo Dockerfile cho Backend
+
+```bash
+# Ở local machine
+cd /path/to/E-Commerce/backend
+
+# Tạo Dockerfile
+cat > Dockerfile << 'EOF'
 FROM python:3.11-slim
 
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
-    gcc pkg-config default-libmysqlclient-dev \
+    gcc \
+    pkg-config \
+    default-libmysqlclient-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first (for layer caching)
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Create necessary directories
+RUN mkdir -p /app/staticfiles /app/media
+
+# Collect static files
+RUN python manage.py collectstatic --noinput || true
+
+# Expose port
+EXPOSE 8000
+
+# Copy and set entrypoint
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["gunicorn", "--workers", "4", "--bind", "0.0.0.0:8000", "backend.wsgi:application"]
+EOF
+```
+
+✅ **Backend Dockerfile created!**
+
+#### Bước 2: Tạo Dockerfile cho Frontend
+
+```bash
+# Ở local machine
+cd /path/to/E-Commerce/frontend
+
+# Tạo Dockerfile (multi-stage build for optimization)
+cat > Dockerfile << 'EOF'
+# Stage 1: Build
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy package files
+COPY package*.json ./
 
+# Install dependencies
+RUN npm ci --legacy-peer-deps
+
+# Copy source code
 COPY . .
 
-RUN python manage.py collectstatic --noinput
+# Build Next.js app
+RUN npm run build
 
-EXPOSE 8000
+# Stage 2: Production
+FROM node:22-alpine AS runner
 
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "backend.wsgi:application"]
+WORKDIR /app
+
+# Copy necessary files from builder
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/next.config.ts ./
+COPY --from=builder /app/node_modules ./node_modules
+
+# Expose port
+EXPOSE 3000
+
+# Start Next.js
+CMD ["npm", "run", "start"]
+EOF
 ```
 
-**Step 2: Tạo docker-compose.yml**
+✅ **Frontend Dockerfile created!**
 
-```yaml
-# docker-compose.yml
+#### Bước 3: Tạo docker-compose.yml ở Root
+
+```bash
+# Ở local machine
+cd /path/to/E-Commerce
+
+# Tạo docker-compose.yml
+cat > docker-compose.yml << 'EOF'
 version: '3.8'
 
 services:
-  backend:
-    build: ./backend
-    ports:
-      - "8000:8000"
-    environment:
-      - DB_HOST=mysql
-      - DB_NAME=ecommerce_db
-      - REDIS_HOST=redis
-    depends_on:
-      - mysql
-      - redis
-
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
-
+  # MySQL Database
   mysql:
     image: mysql:8.0
+    container_name: ecommerce-mysql
+    restart: unless-stopped
     environment:
-      - MYSQL_ROOT_PASSWORD=root123
-      - MYSQL_DATABASE=ecommerce_db
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-Admin123@}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-e_commerce}
+      MYSQL_USER: ${MYSQL_USER:-admin}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-Admin123@}
     volumes:
       - mysql_data:/var/lib/mysql
     ports:
       - "3306:3306"
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
 
+  # Redis Cache
   redis:
-    image: redis:alpine
+    image: redis:7-alpine
+    container_name: ecommerce-redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
+    networks:
+      - ecommerce-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Django Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ecommerce-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ./backend/staticfiles:/app/staticfiles
+      - ./backend/media:/app/media
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ecommerce-network
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn --workers 4 --bind 0.0.0.0:8000 backend.wsgi:application"
+
+  # Next.js Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ecommerce-frontend
+    restart: unless-stopped
+    env_file:
+      - ./frontend/.env.local
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - ecommerce-network
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: ecommerce-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./backend/staticfiles:/var/www/staticfiles:ro
+      - ./backend/media:/var/www/media:ro
+      - nginx_certs:/etc/nginx/certs:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - ecommerce-network
+
+networks:
+  ecommerce-network:
+    driver: bridge
 
 volumes:
   mysql_data:
+  nginx_certs:
+EOF
 ```
 
-**Step 3: Deploy**
+✅ **docker-compose.yml created!**
+
+#### Bước 4: Tạo .dockerignore Files
 
 ```bash
+# Backend .dockerignore
+cat > backend/.dockerignore << 'EOF'
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+.env
+venv/
+env/
+.venv/
+.git
+.gitignore
+*.md
+.DS_Store
+.coverage
+htmlcov/
+*.log
+EOF
+
+# Frontend .dockerignore
+cat > frontend/.dockerignore << 'EOF'
+node_modules
+.next
+.env.local
+.env*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.git
+.gitignore
+*.md
+.DS_Store
+coverage
+.vercel
+EOF
+```
+
+✅ **.dockerignore files created!**
+
+#### Bước 5: Tạo Environment Files Template
+
+```bash
+# Backend .env.example
+cat > backend/.env.docker << 'EOF'
+# Django Settings
+DEBUG=False
+SECRET_KEY=your-production-secret-key-here
+ALLOWED_HOSTS=localhost,127.0.0.1,your-domain.com,your-vm-ip
+
+# Database (Docker services)
+DB_ENGINE=django.db.backends.mysql
+DB_NAME=e_commerce
+DB_USER=admin
+DB_PASSWORD=Admin123@
+DB_HOST=mysql
+DB_PORT=3306
+
+# Redis (Docker service)
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_DB=0
+
+# Backend Configuration
+DJANGO_PORT=8000
+
+# Frontend Configuration
+NEXT_PUBLIC_API_URL=http://your-vm-ip/api
+NEXT_PUBLIC_WS_HOST=your-vm-ip
+FRONTEND_URL=http://your-vm-ip
+
+# Stripe Payment
+STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
+STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+
+# Azure Blob Storage (optional)
+AZURE_STORAGE_ACCOUNT_NAME=
+AZURE_STORAGE_ACCOUNT_KEY=
+AZURE_CONTAINER_NAME=media
+AZURE_CUSTOM_DOMAIN=
+EOF
+
+# Frontend .env.local.docker
+cat > frontend/.env.local.docker << 'EOF'
+NEXT_PUBLIC_API_URL=http://your-vm-ip/api
+NEXT_PUBLIC_WS_HOST=your-vm-ip
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
+EOF
+```
+
+✅ **Environment templates created!**
+
+### 12.2 Test Docker Setup ở Local
+
+```bash
+# Ở local machine, tại root E-Commerce/
+cd /path/to/E-Commerce
+
+# Copy environment files
+cp backend/.env.docker backend/.env
+cp frontend/.env.local.docker frontend/.env.local
+
+# Update với thông tin thật (IP, domain, keys)
+nano backend/.env
+nano frontend/.env.local
+
 # Build images
 docker-compose build
 
-# Start all services
+# Start services
 docker-compose up -d
 
 # Check logs
 docker-compose logs -f
 
-# Stop
+# Test services
+curl http://localhost:8000/api/products/  # Backend API
+curl http://localhost:3000                 # Frontend
+curl http://localhost                      # Nginx
+
+# Stop services
 docker-compose down
 ```
 
-**Step 4: Update Nginx (vẫn trên VM)**
+✅ **Docker setup tested locally!**
 
-```nginx
-# backend now at container port 8000
-upstream backend {
-    server 127.0.0.1:8000;
-}
+### 12.3 Push Docker Files lên GitHub
 
-# frontend now at container port 3000
-upstream frontend {
-    server 127.0.0.1:3000;
-}
+```bash
+# Ở local machine
+cd /path/to/E-Commerce
 
-# Rest of Nginx config is the same!
+# Add Docker files
+git add backend/Dockerfile
+git add backend/.dockerignore
+git add frontend/Dockerfile
+git add frontend/.dockerignore
+git add docker-compose.yml
+git add backend/.env.docker
+git add frontend/.env.local.docker
+
+# Commit
+git commit -m "Add Docker configuration for easy deployment"
+
+# Push
+git push origin main
 ```
 
-✅ **Done! Chuyển sang Docker chỉ cần 2 files + docker-compose**
+✅ **Docker files pushed to GitHub!**
+
+### 12.4 Deploy lên Azure VM với Docker
+
+#### Bước 1: Cài Docker trên VM
+
+```bash
+# SSH vào VM
+ssh azureuser@20.2.82.70
+
+# Install Docker
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+
+# Add user to docker group
+sudo usermod -aG docker $USER
+
+# Logout and login again để apply group
+exit
+ssh azureuser@20.2.82.70
+
+# Verify Docker
+docker --version
+# Output: Docker version 24.x.x
+
+# Install Docker Compose (v2)
+sudo apt update
+sudo apt install -y docker-compose-plugin
+
+# Verify Docker Compose
+docker compose version
+# Output: Docker Compose version v2.x.x
+```
+
+✅ **Docker installed on VM!**
+
+#### Bước 2: Pull Code và Setup Environment
+
+```bash
+# SSH vào VM
+ssh azureuser@20.2.82.70
+
+# Pull code mới nhất (hoặc clone nếu chưa có)
+cd /opt/E-Commerce
+git pull origin main
+
+# Hoặc clone lần đầu:
+# cd /opt
+# sudo git clone https://github.com/dinhhoang235/E-Commerce.git
+# sudo chown -R azureuser:azureuser /opt/E-Commerce
+
+# Copy và update environment files
+cd /opt/E-Commerce
+cp backend/.env.docker backend/.env
+cp frontend/.env.local.docker frontend/.env.local
+
+# Update với thông tin production
+nano backend/.env
+# Sửa:
+# - ALLOWED_HOSTS=localhost,127.0.0.1,20.2.82.70
+# - NEXT_PUBLIC_API_URL=http://20.2.82.70/api
+# - FRONTEND_URL=http://20.2.82.70
+# - DB_HOST=mysql (giữ nguyên)
+# - REDIS_HOST=redis (giữ nguyên)
+
+nano frontend/.env.local
+# Sửa:
+# - NEXT_PUBLIC_API_URL=http://20.2.82.70/api
+# - NEXT_PUBLIC_WS_HOST=20.2.82.70
+```
+
+✅ **Environment configured!**
+
+#### Bước 3: Start Docker Services
+
+```bash
+# Tại /opt/E-Commerce
+cd /opt/E-Commerce
+
+# Build images
+docker compose build
+
+# Start all services
+docker compose up -d
+
+# Check services status
+docker compose ps
+
+# Output:
+# NAME                   STATUS      PORTS
+# ecommerce-backend      running     0.0.0.0:8000->8000/tcp
+# ecommerce-frontend     running     0.0.0.0:3000->3000/tcp
+# ecommerce-mysql        running     0.0.0.0:3306->3306/tcp
+# ecommerce-redis        running     0.0.0.0:6379->6379/tcp
+# ecommerce-nginx        running     0.0.0.0:80->80/tcp
+
+# View logs
+docker compose logs -f backend
+docker compose logs -f frontend
+docker compose logs -f nginx
+```
+
+✅ **Docker services running!**
+
+#### Bước 4: Run Django Setup Commands
+
+```bash
+# Tại /opt/E-Commerce
+
+# Run migrations
+docker compose exec backend python manage.py migrate
+
+# Create superuser
+docker compose exec backend python manage.py createsuperuser
+
+# Seed database (optional)
+docker compose exec backend python manage.py seed_categories
+docker compose exec backend python manage.py seed_colors
+docker compose exec backend python manage.py seed_products
+docker compose exec backend python manage.py seed_productVariant
+
+# Collect static files (đã auto run nhưng có thể run lại)
+docker compose exec backend python manage.py collectstatic --noinput
+```
+
+✅ **Django setup completed!**
+
+#### Bước 5: Nginx Configuration với Docker
+
+> **Lưu ý**: File `nginx/default.conf` đã có sẵn trong repo và được mount vào nginx container qua docker-compose.yml
+
+Nginx container đã được config sẵn trong `docker-compose.yml`:
+
+```yaml
+# Đã có trong docker-compose.yml
+nginx:
+  image: nginx:alpine
+  container_name: ecommerce-nginx
+  ports:
+    - "80:80"
+  volumes:
+    - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    - ./backend/staticfiles:/var/www/staticfiles:ro
+    - ./backend/media:/var/www/media:ro
+```
+
+Nginx config (`nginx/default.conf`) dùng Docker service names:
+
+```nginx
+# upstream backend {
+#     server backend:8000;  # ← Tên Docker service, không phải localhost
+# }
+# 
+# upstream frontend {
+#     server frontend:3000;  # ← Tên Docker service
+# }
+```
+
+**Không cần sửa gì**, config đã đúng cho Docker! Chỉ cần:
+
+```bash
+# Stop nginx host nếu đang chạy (tránh port conflict)
+sudo systemctl stop nginx
+sudo systemctl disable nginx
+
+# Nginx container sẽ handle tất cả requests
+docker compose ps nginx
+# Output: ecommerce-nginx   running   0.0.0.0:80->80/tcp
+```
+
+✅ **Nginx configured!**
+
+### 12.5 Test Full Stack với Docker
+
+```bash
+# Test từ VM
+curl http://localhost              # Nginx → Frontend
+curl http://localhost/api/products/  # Nginx → Backend API
+curl http://localhost/django-admin/  # Django Admin
+
+# Test từ local machine
+curl http://20.2.82.70
+curl http://20.2.82.70/api/products/
+
+# Hoặc mở browser:
+# http://20.2.82.70
+# http://20.2.82.70/django-admin/
+```
+
+✅ **Full stack working!**
+
+### 12.6 Docker Management Commands
+
+#### Stop/Start Services
+
+```bash
+# Stop all services
+docker compose down
+
+# Start all services
+docker compose up -d
+
+# Restart specific service
+docker compose restart backend
+docker compose restart frontend
+
+# View logs
+docker compose logs -f backend
+docker compose logs backend --tail 100
+
+# Execute command in container
+docker compose exec backend python manage.py shell
+docker compose exec mysql mysql -u admin -p e_commerce
+```
+
+#### Update Code & Rebuild
+
+```bash
+# Pull code mới từ GitHub
+cd /opt/E-Commerce
+git pull origin main
+
+# Rebuild changed services
+docker compose build backend
+docker compose build frontend
+
+# Restart với images mới
+docker compose up -d
+
+# Run migrations nếu có
+docker compose exec backend python manage.py migrate
+
+# Restart services
+docker compose restart backend frontend
+```
+
+#### View Container Stats
+
+```bash
+# Resource usage
+docker stats
+
+# List containers
+docker ps
+
+# List images
+docker images
+
+# Inspect container
+docker compose exec backend env
+docker compose exec backend ps aux
+```
+
+### 12.7 Auto-restart Docker on Boot
+
+```bash
+# Docker containers đã có restart: unless-stopped
+# Nhưng cần ensure Docker daemon start on boot
+
+# Enable Docker service
+sudo systemctl enable docker
+
+# Start on boot
+sudo systemctl start docker
+
+# Verify
+sudo systemctl status docker
+
+# Test reboot
+sudo reboot
+
+# Sau khi VM restart, check:
+ssh azureuser@20.2.82.70
+docker compose ps
+# All services should be running
+```
+
+✅ **Auto-restart configured!**
+
+### 12.8 Backup & Restore với Docker
+
+#### Backup Database
+
+```bash
+# Backup MySQL container
+docker compose exec mysql mysqldump -u admin -pAdmin123@ e_commerce > backup_$(date +%Y%m%d).sql
+
+# Hoặc backup volume
+docker run --rm \
+  -v ecommerce_mysql_data:/data \
+  -v $(pwd):/backup \
+  alpine tar czf /backup/mysql_backup_$(date +%Y%m%d).tar.gz /data
+```
+
+#### Restore Database
+
+```bash
+# Restore SQL dump
+cat backup_20251223.sql | docker compose exec -T mysql mysql -u admin -pAdmin123@ e_commerce
+
+# Hoặc restore volume
+docker run --rm \
+  -v ecommerce_mysql_data:/data \
+  -v $(pwd):/backup \
+  alpine tar xzf /backup/mysql_backup_20251223.tar.gz -C /
+```
+
+### 12.9 Troubleshooting Docker
+
+#### Container không start
+
+```bash
+# Check logs
+docker compose logs backend
+
+# Check container status
+docker compose ps
+
+# Rebuild image
+docker compose build --no-cache backend
+docker compose up -d backend
+```
+
+#### Port conflicts
+
+```bash
+# Check port usage
+sudo ss -tlnp | grep 8000
+
+# Stop conflicting service
+sudo supervisorctl stop ecommerce-backend  # Traditional deployment
+sudo systemctl stop nginx                   # Host nginx
+
+# Restart Docker containers
+docker compose restart
+```
+
+#### Database connection errors
+
+```bash
+# Check MySQL container
+docker compose logs mysql
+
+# Check network
+docker compose exec backend ping mysql
+
+# Check environment variables
+docker compose exec backend env | grep DB_
+```
+
+#### Out of disk space
+
+```bash
+# Remove unused images
+docker image prune -a
+
+# Remove unused volumes
+docker volume prune
+
+# Remove unused containers
+docker container prune
+
+# Check disk usage
+df -h
+docker system df
+```
+
+### 12.10 So Sánh: Traditional vs Docker Deployment
+
+| Feature | Traditional (Manual) | Docker |
+|---------|---------------------|--------|
+| **Setup Time** | 1-2 giờ | 30 phút |
+| **Update Code** | `git pull` + restart services | `git pull` + `docker compose up -d` |
+| **Dependencies** | Cài manual từng cái | Docker images có sẵn |
+| **Rollback** | Phức tạp | `git checkout` + rebuild |
+| **Environment** | Phụ thuộc VM OS | Consistent mọi nơi |
+| **Resource** | Ít overhead | Hơi nhiều (containers) |
+| **Debugging** | SSH + logs | `docker exec` + logs |
+| **Port Conflicts** | Dễ xảy ra | Isolated |
+| **Team Work** | Setup khác nhau | Giống nhau (Dockerfile) |
+| **Learning** | Hiểu Linux sâu | Hiểu Docker |
+
+### 12.11 Best Practices Docker Deployment
+
+✅ **Development:**
+```bash
+# Dùng docker-compose với hot reload
+docker compose -f docker-compose.dev.yml up
+```
+
+✅ **Staging:**
+```bash
+# Dùng docker-compose production
+docker compose up -d
+```
+
+✅ **Production:**
+```bash
+# Thêm health checks
+# Thêm resource limits
+# Setup monitoring (Prometheus, Grafana)
+# Setup automated backups
+# Setup CI/CD pipeline
+```
 
 ---
 
-### Recommendation cho Bạn
+## 📊 Summary: Deployment Options
 
-1. **Bắt đầu với Traditional** (Guide hiện tại)
-   - Hiểu Linux sâu
-   - Hiểu cách mọi thứ chạy
-   - Có SSH access để debug
+Bạn có **3 cách deploy**:
 
-2. **Sau đó thêm Docker** (Optional)
-   - Tạo Dockerfile
-   - Tạo docker-compose
-   - Thấy benefits của Docker
-   - Học Kubernetes sau
+### 1️⃣ Traditional Manual (BƯỚC 1-11)
+- ✅ Full control
+- ✅ Hiểu Linux sâu
+- ✅ Resource efficient
+- ❌ Setup phức tạp
+- ❌ Update code cần nhiều bước
 
-3. **Hoặc bỏ qua Docker, tập trung Traditional**
-   - Đủ cho learning purpose
-   - Đủ cho small-medium apps
-   - Hiểu sâu Linux (valuable skill)
+**Khi nào dùng**: Learning, debugging, small apps
+
+### 2️⃣ Docker Compose (BƯỚC 12)
+- ✅ Setup nhanh (30 phút)
+- ✅ Update dễ (`git pull` + `docker compose up`)
+- ✅ Consistent environment
+- ❌ Overhead (RAM/CPU)
+- ❌ Debugging hơi khó hơn
+
+**Khi nào dùng**: Team work, multiple environments, production
+
+### 3️⃣ Hybrid (Traditional + Docker)
+- ✅ Dùng Docker cho apps
+- ✅ Dùng host nginx/SSL
+- ✅ Easy debugging (SSH)
+- ✅ Best of both worlds
+
+**Khi nào dùng**: Production với full control
+
+---
+
+## 🎯 Recommendation
+
+**Bước học:**
+1. ✅ **Bắt đầu với Traditional** (BƯỚC 1-11) → Hiểu cơ chế
+2. ✅ **Chuyển sang Docker** (BƯỚC 12) → Production ready
+3. ✅ **Setup CI/CD** (GitHub Actions) → Auto deploy
+
+**Production:**
+- Small app (< 1000 users): Traditional hoặc Docker đều OK
+- Medium app (1K-10K users): Docker + monitoring
+- Large app (> 10K users): Kubernetes + auto-scaling
 
 ---
