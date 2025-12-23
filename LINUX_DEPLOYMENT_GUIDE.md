@@ -817,8 +817,8 @@ npm list next
 nano /var/www/frontend/.env.local
 
 # Add content (only NEXT_PUBLIC_* variables):
-NEXT_PUBLIC_API_URL=http://localhost/api
-NEXT_PUBLIC_WS_HOST=localhost
+NEXT_PUBLIC_API_URL=http://***/api
+NEXT_PUBLIC_WS_HOST=***
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key_here
 
 # Ctrl+X → Y → Enter
@@ -968,8 +968,8 @@ server {
         proxy_read_timeout 60s;
     }
 
-    # Admin panel
-    location /admin/ {
+    # Django Admin (changed to avoid conflict with Next.js admin)
+    location /django-admin/ {
         proxy_pass http://backend;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -984,10 +984,11 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
-    # Media files (từ Blob Storage - config sau)
+    # Media files (serve from local)
     location /media/ {
-        proxy_pass http://blob_storage_url/media/;  # Sẽ config sau
+        alias /var/www/backend/media/;
         expires 7d;
+        add_header Cache-Control "public";
     }
 }
 
