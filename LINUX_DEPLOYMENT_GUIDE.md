@@ -1,31 +1,4 @@
-# 🚀 DigitalOcean Droplet Deployment Guide - E-Commerce Platform (Traditional Linux Approach)
-
-> **Mục đích**: Deploy ứng dụng E-Commerce lên DigitalOcean Droplet (Ubuntu 22.04) sử dụng SSH, Nginx, Gunicorn, và Supervisor
-> 
-> **Dành cho**: Developers biết Linux, SSH, và muốn hiểu Deep cách deploy thực tế
->
-> **⏱️ Thời gian**: ~45 phút setup + 15 phút troubleshooting = ~1 giờ tổng cộng  
-> **💰 Chi phí**: ~$6-12/tháng (Basic Droplet) - rẻ nhất thị trường  
-> **🎯 Tại sao DigitalOcean**: Simple, rẻ, documentation tốt, community lớn
-
----
-
-## 📋 Mục Lục
-
-1. [Architecture](#-architecture)
-2. [Yêu Cầu](#-yêu-cầu)
-3. [BƯỚC 1: Tạo DigitalOcean Droplet](#bước-1-tạo-digitalocean-droplet)
-4. [BƯỚC 2: Setup Initial Linux](#bước-2-setup-initial-linux)
-5. [BƯỚC 3: Cài Dependencies](#bước-3-cài-dependencies)
-6. [BƯỚC 4: Deploy Backend (Django + Gunicorn)](#bước-4-deploy-backend-django--gunicorn)
-7. [BƯỚC 5: Deploy Frontend (Next.js)](#bước-5-deploy-frontend-nextjs)
-8. [BƯỚC 6: Setup Nginx Reverse Proxy](#bước-6-setup-nginx-reverse-proxy)
-9. [BƯỚC 7: Setup SSL/HTTPS (Let's Encrypt)](#bước-7-setup-ssltls-letsencrypt)
-10. [BƯỚC 8: Database Setup](#bước-8-database-setup)
-11. [BƯỚC 9: Storage Setup (Local Media)](#bước-9-storage-setup-local-media-files)
-12. [BƯỚC 10: Monitoring & Logs](#bước-10-monitoring--logs)
-13. [BƯỚC 11: Auto-restart & Systemd](#bước-11-auto-restart--systemd)
-
+# 🚀 Deployment Guide - E-Commerce Platform
 
 ## 🏗️ Architecture
 
@@ -1533,43 +1506,6 @@ sudo supervisorctl reread
 sudo supervisorctl update ecommerce-backend
 ```
 
----
-
-## 💰 Cost Estimate (Monthly)
-
-| Service | SKU | Cost |
-|---------|-----|------|
-| VM (Compute) | Standard_B2s | ~$30 |
-| Storage Account | Standard_LRS | ~$2 |
-| (Optional) MySQL | Standard_B1s | ~$20 |
-| (Optional) Redis | Basic C0 | ~$5 |
-| **Total** | | **~$32-57/month** |
-
-**vs Container Apps: $1.50/test → ~$50-100/month persistent**
-
----
-
-## � Cost Estimate (Monthly)
-
-| Service | SKU | Cost (USD) |
-|---------|-----|------------|
-| Droplet (Compute) | Basic 2GB | $12 |
-| (Optional) Managed MySQL | Basic 1GB | $15 |
-| (Optional) Managed Redis | Basic 1GB | $15 |
-| **Total (Local DB)** | | **~$12/month** |
-| **Total (Managed DB+Redis)** | | **~$42/month** |
-
-**So với Azure:**
-- Azure VM B1s: $15-30/month
-- Azure Blob: $2-5/month
-- **DigitalOcean rẻ hơn ~30-40%**
-
-**Free Credits:**
-- New account: $200 credit for 60 days
-- GitHub Student Pack: $200 credit
-
----
-
 ## 📚 Reference Commands
 
 ### Quick Restart All
@@ -1756,239 +1692,7 @@ doctl compute droplet-action snapshot 123456789 \
 
 ---
 
-## 🐳 So Sánh: Traditional vs Docker
-
-Nếu thêm Docker vào guide này, sẽ trở thành **Droplet + Docker Hybrid Approach**.
-
-### Cách Traditional (Guide Hiện Tại)
-
-```bash
-# Cài trực tiếp lên Droplet:
-sudo apt install python3.11
-sudo apt install nodejs
-sudo apt install mysql-server
-sudo apt install redis-server
-sudo apt install nginx
-
-# Clone code
-cd /var/www/backend
-pip install -r requirements.txt
-
-# Run với Gunicorn + Supervisor
-sudo supervisorctl start ecommerce-backend
-```
-
-**Ưu điểm:**
-- ✅ Simple, straightforward
-- ✅ Dễ debug (SSH vào VM, tìm log)
-- ✅ Dễ modify config
-- ✅ Resource efficient
-- ✅ **Tốt cho learning**
-
-**Nhược điểm:**
-- ❌ Setup phức tạp (cài từng cái một)
-- ❌ Dễ "dependency hell" (xung đột version)
-- ❌ Khó redeploy (cài lại từ đầu)
-- ❌ Khó scale (nhân bản)
-- ❌ Environment không consistent
-
----
-
-### Cách Docker (Hybrid Approach)
-
-```bash
-# Cài Docker trên VM
-curl https://get.docker.com | sh
-
-# Tạo Dockerfile cho Backend
-FROM python:3.11-slim
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-COPY . .
-CMD ["gunicorn", "backend.wsgi:application"]
-
-# Tạo Dockerfile cho Frontend
-FROM node:22-slim
-COPY package.json .
-RUN npm install
-COPY . .
-CMD ["npm", "run", "start"]
-
-# docker-compose.yml
-version: '3.8'
-services:
-  backend:
-    build: ./backend
-    ports:
-      - "8000:8000"
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:3000"
-  mysql:
-    image: mysql:8.0
-    ports:
-      - "3306:3306"
-  redis:
-    image: redis:alpine
-    ports:
-      - "6379:6379"
-
-# Deploy
-docker-compose up -d
-```
-
-**Ưu điểm:**
-- ✅ Setup nhanh (docker-compose up)
-- ✅ Easy rebuild/redeploy
-- ✅ Environment consistent (dev = production)
-- ✅ Dễ scale (nhân bản container)
-- ✅ Dễ move (push/pull images)
-- ✅ Isolation (không ảnh hưởng VM)
-- ✅ **Tốt cho production**
-
-**Nhược điểm:**
-- ❌ Thêm complexity (Docker learning curve)
-- ❌ Resource overhead (Docker daemon chạy)
-- ❌ Debug hơi khó (SSH vào container phức tạp)
-- ❌ Logs tập trung (không thấy system logs)
-
----
-
-### So Sánh Chi Tiết
-
-| Tiêu Chí | Traditional | Docker |
-|---------|-----------|--------|
-| **Setup Time** | 1-2 giờ | 30 phút |
-| **Knowledge** | Linux deep | Docker basics |
-| **Rebuild** | 30 phút (manual) | 5 phút (docker build) |
-| **Redeploy** | 10 phút (scp + restart) | 1 phút (docker-compose restart) |
-| **Version Control** | Git only | Docker image tags |
-| **Dependency** | Có xung đột | Isolated |
-| **Environment** | Dev ≠ Prod | Dev = Prod |
-| **Debug** | SSH + tail logs | docker logs + exec |
-| **Scaling** | Manual | docker-compose scale |
-| **Cost** | Rẻ hơn | Hơi đắt (RAM/CPU) |
-| **Learning Value** | **Rất cao** | Trung bình |
-| **Job Market** | **Rất cao** | Rất cao |
-
----
-
-### Learning Path Recommendation
-
-#### **Path 1: Traditional First (Recommended for Interns)**
-
-```
-Week 1-2: Traditional Approach (Guide hiện tại)
-  ├─ Hiểu cách app chạy
-  ├─ Hiểu Linux sâu
-  ├─ Hiểu process management
-  └─ Hiểu networking & firewall
-
-Week 3-4: Thêm Docker vào
-  ├─ Tạo Dockerfile
-  ├─ Tạo docker-compose
-  ├─ Deploy với Docker
-  └─ So sánh với Traditional
-
-Week 5+: Advanced
-  ├─ Multi-stage builds
-  ├─ Docker networks
-  ├─ Volume management
-  └─ Kubernetes basics
-```
-
-**Lợi ích:**
-- Hiểu sâu cơ chế trước (Traditional)
-- Sau đó đánh giá được Docker dùng tốt hay không
-- Khi debug, biết vấn đề ở đâu (OS, app, network)
-
----
-
-#### **Path 2: Docker First (For Fast Learners)**
-
-```
-Week 1: Quick Traditional Setup
-  └─ Understand basic deployment
-
-Week 2-3: Docker All The Way
-  ├─ Dockerfile for all services
-  ├─ docker-compose orchestration
-  ├─ Easy rebuild/redeploy
-  └─ Move to any server
-
-Week 4+: Kubernetes
-  ├─ Helm charts
-  ├─ Deployments
-  ├─ Services
-  └─ Production scaling
-```
-
-**Lợi ích:**
-- Nhanh đến production
-- Dễ collaborate (Dockerfile is the spec)
-- Dễ scale
-
----
-
-### Khi Nào Dùng Traditional?
-
-✅ **Dùng Traditional (Cài Tay):**
-- Learning (muốn hiểu sâu)
-- Debugging (dễ thấy issue)
-- Small apps (cost savings)
-- Full OS control
-- Job interviews (show Linux skills)
-
----
-
-### Khi Nào Dùng Docker?
-
-✅ **Dùng Docker:**
-- Production (consistency)
-- Team collaboration (everyone same env)
-- Microservices (multiple apps)
-- Scaling (easy to replicate)
-- CI/CD pipelines (automated builds)
-- Cloud deployment (AWS ECS, DigitalOcean App Platform, Azure ACI)
-
----
-
 ### Hybrid: Traditional + Docker (Best of Both Worlds)
-
-```
-Droplet (Ubuntu 22.04) + Docker Engine
-
-┌─────────────────────────────────┐
-│  DigitalOcean Droplet (Ubuntu)  │
-│                                 │
-│  SSH Access ✅                  │
-│  └─ Manage, Debug, Monitor      │
-│                                 │
-│  ┌────────────────────────────┐ │
-│  │ Docker Engine              │ │
-│  │                            │ │
-│  │ [Backend Container]        │ │
-│  │ [Frontend Container]       │ │
-│  │ [MySQL Container]          │ │
-│  │ [Redis Container]          │ │
-│  │                            │ │
-│  └────────────────────────────┘ │
-│                                 │
-│  Nginx (Host) ← Reverse Proxy   │
-│  SSL Cert (Host)                │
-└─────────────────────────────────┘
-```
-
-**Benefits:**
-- ✅ SSH access + VM control
-- ✅ Docker convenience (rebuild, redeploy)
-- ✅ Easy debugging (SSH vào container hoặc VM)
-- ✅ Cost effective
-- ✅ Scalable
-- ✅ **Tốt nhất cho production + learning**
-
----
 
 ## 🐳 BƯỚC 12: Deploy với Docker (Alternative Approach)
 
@@ -1998,16 +1702,70 @@ Droplet (Ubuntu 22.04) + Docker Engine
 > 
 > **⏱️ Thời gian**: ~30 phút setup local + 10 phút deploy trên VM
 
-### 12.1 Chuẩn Bị Files Docker ở Local
+### 12.1 Cấu Trúc Docker Files
 
-#### Bước 1: Tạo Dockerfile cho Backend
+Project đã có đầy đủ Docker configuration:
 
-```bash
-# Ở local machine
-cd /path/to/E-Commerce/backend
+```
+E-Commerce/
+├── docker-compose.yml           # Development setup
+├── docker-compose.prod.yml      # Production setup
+├── .env.prod.example            # Production environment template
+├── DOCKER_DEPLOYMENT.md         # Full Docker deployment guide
+├── backend/
+│   ├── dockerfile               # Development Dockerfile
+│   ├── Dockerfile.prod          # Production Dockerfile (optimized)
+│   ├── .dockerignore
+│   └── entrypoint.sh
+├── frontend/
+│   ├── dockerfile               # Development Dockerfile
+│   ├── Dockerfile.prod          # Production Dockerfile (multi-stage)
+│   └── .dockerignore
+└── nginx/
+    └── default.conf
+```
 
-# Tạo Dockerfile
-cat > Dockerfile << 'EOF'
+### 12.2 Development vs Production Dockerfiles
+
+#### **Backend Dockerfiles:**
+
+**Development (`backend/dockerfile`):**
+```dockerfile
+# Development Dockerfile
+FROM python:3.12-slim
+
+# Install system dependencies (including netcat for wait scripts)
+RUN apt-get update && apt-get install -y \
+    gcc \
+    pkg-config \
+    default-libmysqlclient-dev \
+    build-essential \
+    netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --upgrade pip setuptools wheel
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Make entrypoint executable
+RUN chmod +x /app/entrypoint.sh
+
+EXPOSE 8000
+
+# Use entrypoint for development (with uvicorn --reload)
+CMD ["/app/entrypoint.sh"]
+```
+
+**Production (`backend/Dockerfile.prod`):**
+```dockerfile
 FROM python:3.11-slim
 
 # Install system dependencies
@@ -2039,25 +1797,39 @@ RUN python manage.py collectstatic --noinput || true
 # Expose port
 EXPOSE 8000
 
-# Copy and set entrypoint
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+# Run migrations and start Gunicorn
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn --workers 4 --bind 0.0.0.0:8000 backend.wsgi:application"]
 
-ENTRYPOINT ["/entrypoint.sh"]
-CMD ["gunicorn", "--workers", "4", "--bind", "0.0.0.0:8000", "backend.wsgi:application"]
-EOF
 ```
 
-✅ **Backend Dockerfile created!**
+#### **Frontend Dockerfiles:**
 
-#### Bước 2: Tạo Dockerfile cho Frontend
+**Development (`frontend/dockerfile`):**
+```dockerfile
+# Development Dockerfile
+FROM node:22-slim
 
-```bash
-# Ở local machine
-cd /path/to/E-Commerce/frontend
+# Set working directory
+WORKDIR /app
 
-# Tạo Dockerfile (multi-stage build for optimization)
-cat > Dockerfile << 'EOF'
+# Copy package.json and package-lock.json
+COPY package.json package-lock.json* ./
+
+# Install dependencies
+RUN npm ci --no-audit --legacy-peer-deps
+
+# Copy the rest of the code
+COPY . .
+
+# Expose Next.js development port
+EXPOSE 3000
+
+# Start Next.js in development mode with hot reload
+CMD ["npm", "run", "dev"]
+```
+
+**Production (`frontend/Dockerfile.prod`):**
+```dockerfile
 # Stage 1: Build
 FROM node:22-alpine AS builder
 
@@ -2092,506 +1864,299 @@ EXPOSE 3000
 
 # Start Next.js
 CMD ["npm", "run", "start"]
-EOF
 ```
 
-✅ **Frontend Dockerfile created!**
+**Key Differences:**
+- **Backend Dev**: Python 3.12, netcat included, Uvicorn with reload
+- **Backend Prod**: Python 3.11, minimal deps, Gunicorn 4 workers, auto migrations
+- **Frontend Dev**: Node 22-slim, npm dev, hot reload
+- **Frontend Prod**: Node 22-alpine, multi-stage build, optimized bundle
 
-#### Bước 3: Tạo docker-compose.yml ở Root
-
-```bash
-# Ở local machine
-cd /path/to/E-Commerce
-
-# Tạo docker-compose.yml
-cat > docker-compose.yml << 'EOF'
-version: '3.8'
-
-services:
-  # MySQL Database
-  mysql:
-    image: mysql:8.0
-    container_name: ecommerce-mysql
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-Admin123@}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-e_commerce}
-      MYSQL_USER: ${MYSQL_USER:-admin}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-Admin123@}
-    volumes:
-      - mysql_data:/var/lib/mysql
-    ports:
-      - "3306:3306"
-    networks:
-      - ecommerce-network
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 20s
-      retries: 10
-
-  # Redis Cache
-  redis:
-    image: redis:7-alpine
-    container_name: ecommerce-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    networks:
-      - ecommerce-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Django Backend
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: ecommerce-backend
-    restart: unless-stopped
-    env_file:
-      - ./backend/.env
-    environment:
-      - DB_HOST=mysql
-      - DB_PORT=3306
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    volumes:
-      - ./backend/staticfiles:/app/staticfiles
-      - ./backend/media:/app/media
-    ports:
-      - "8000:8000"
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - ecommerce-network
-    command: >
-      sh -c "python manage.py migrate --noinput &&
-             python manage.py collectstatic --noinput &&
-             gunicorn --workers 4 --bind 0.0.0.0:8000 backend.wsgi:application"
-
-  # Next.js Frontend
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: ecommerce-frontend
-    restart: unless-stopped
-    env_file:
-      - ./frontend/.env.local
-    ports:
-      - "3000:3000"
-    depends_on:
-      - backend
-    networks:
-      - ecommerce-network
-
-  # Nginx Reverse Proxy
-  nginx:
-    image: nginx:alpine
-    container_name: ecommerce-nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./backend/staticfiles:/var/www/staticfiles:ro
-      - ./backend/media:/var/www/media:ro
-      - nginx_certs:/etc/nginx/certs:ro
-    depends_on:
-      - backend
-      - frontend
-    networks:
-      - ecommerce-network
-
-networks:
-  ecommerce-network:
-    driver: bridge
-
-volumes:
-  mysql_data:
-  nginx_certs:
-EOF
-```
-
-✅ **docker-compose.yml created!**
-
-#### Bước 4: Tạo .dockerignore Files
+### 12.3 Quick Start - Development (Test ở Local)
 
 ```bash
-# Backend .dockerignore
-cat > backend/.dockerignore << 'EOF'
-__pycache__
-*.pyc
-*.pyo
-*.pyd
-.Python
-*.so
-*.egg
-*.egg-info
-dist
-build
-.env
-venv/
-env/
-.venv/
-.git
-.gitignore
-*.md
-.DS_Store
-.coverage
-htmlcov/
-*.log
-EOF
+# Clone repository
+git clone https://github.com/dinhhoang235/E-Commerce.git
+cd E-Commerce
 
-# Frontend .dockerignore
-cat > frontend/.dockerignore << 'EOF'
-node_modules
-.next
-.env.local
-.env*.local
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.git
-.gitignore
-*.md
-.DS_Store
-coverage
-.vercel
-EOF
-```
+# Create environment file
+cp .env.example .env
+# Edit .env with your settings
+nano .env
 
-✅ **.dockerignore files created!**
+# Start all services
+docker-compose up --build
 
-#### Bước 5: Tạo Environment Files Template
-
-```bash
-# Backend .env.example
-cat > backend/.env.docker << 'EOF'
-# Django Settings
-DEBUG=False
-SECRET_KEY=your-production-secret-key-here
-ALLOWED_HOSTS=localhost,127.0.0.1,your-domain.com,your-vm-ip
-
-# Database (Docker services)
-DB_ENGINE=django.db.backends.mysql
-DB_NAME=e_commerce
-DB_USER=admin
-DB_PASSWORD=Admin123@
-DB_HOST=mysql
-DB_PORT=3306
-
-# Redis (Docker service)
-REDIS_HOST=redis
-REDIS_PORT=6379
-REDIS_DB=0
-
-# Backend Configuration
-DJANGO_PORT=8000
-
-# Frontend Configuration
-NEXT_PUBLIC_API_URL=http://your-droplet-ip/api
-NEXT_PUBLIC_WS_HOST=your-droplet-ip
-FRONTEND_URL=http://your-droplet-ip
-
-# Stripe Payment
-STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
-STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
-STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
-
-# Media files served from local VPS (no object storage needed)
-EOF
-
-# Frontend .env.local.docker
-cat > frontend/.env.local.docker << 'EOF'
-NEXT_PUBLIC_API_URL=http://your-droplet-ip/api
-NEXT_PUBLIC_WS_HOST=your-droplet-ip
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
-EOF
-```
-
-✅ **Environment templates created!**
-
-### 12.2 Test Docker Setup ở Local
-
-```bash
-# Ở local machine, tại root E-Commerce/
-cd /path/to/E-Commerce
-
-# Copy environment files
-cp backend/.env.docker backend/.env
-cp frontend/.env.local.docker frontend/.env.local
-
-# Update với thông tin thật (IP, domain, keys)
-nano backend/.env
-nano frontend/.env.local
-
-# Build images
-docker-compose build
-
-# Start services
-docker-compose up -d
-
-# Check logs
-docker-compose logs -f
-
-# Test services
-curl http://localhost:8000/api/products/  # Backend API
-curl http://localhost:3000                 # Frontend
-curl http://localhost                      # Nginx
+# Access:
+# - Frontend: http://localhost
+# - Backend API: http://localhost:8080/api
+# - Admin: http://localhost:8080/admin
 
 # Stop services
 docker-compose down
 ```
 
-✅ **Docker setup tested locally!**
+✅ **Development environment running!**
 
-### 12.3 Push Docker Files lên GitHub
+---
 
-```bash
-# Ở local machine
-cd /path/to/E-Commerce
+### 12.4 Production Deployment on VPS
 
-# Add Docker files
-git add backend/Dockerfile
-git add backend/.dockerignore
-git add frontend/Dockerfile
-git add frontend/.dockerignore
-git add docker-compose.yml
-git add backend/.env.docker
-git add frontend/.env.local.docker
-
-# Commit
-git commit -m "Add Docker configuration for easy deployment"
-
-# Push
-git push origin main
-```
-
-✅ **Docker files pushed to GitHub!**
-
-### 12.4 Deploy lên DigitalOcean Droplet với Docker
-
-#### Bước 1: Cài Docker trên Droplet
+#### **Bước 1: SSH vào VPS & Chuẩn Bị**
 
 ```bash
-# SSH vào Droplet
+# SSH vào VPS (sử dụng user deploy đã tạo ở BƯỚC 2)
 ssh deploy@128.199.xxx.xxx
 
+# Clone repository vào /opt
+cd /opt
+sudo git clone https://github.com/dinhhoang235/E-Commerce.git
+sudo chown -R deploy:deploy /opt/E-Commerce
+cd /opt/E-Commerce
+
+# Verify files
+ls -la
+# Output: docker-compose.prod.yml, .env.prod.example, backend/, frontend/, nginx/
+```
+
+✅ **Repository cloned!**
+
+#### **Bước 2: Create Production Environment File**
+
+```bash
+cd /opt/E-Commerce
+
+# Create .env.prod from template
+cp .env.prod.example .env.prod
+
+# Edit với production values
+nano .env.prod
+```
+
+**⚠️ IMPORTANT - Production Values:**
+
+```bash
+# Security
+DEBUG=False
+SECRET_KEY=your-random-50-character-secret-key-here
+ALLOWED_HOSTS=your-domain.com,www.your-domain.com,128.199.xxx.xxx
+
+# Database (strong passwords!)
+DB_ENGINE=django.db.backends.mysql
+DB_NAME=e_commerce
+DB_USER=admin
+DB_PASSWORD=Your-Strong-DB-Password-123!
+DB_HOST=db
+DB_PORT=3306
+
+MYSQL_ROOT_PASSWORD=Your-Strong-Root-Password-456!
+MYSQL_DATABASE=e_commerce
+MYSQL_USER=admin
+MYSQL_PASSWORD=Your-Strong-DB-Password-123!
+
+# Redis
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_DB=0
+
+# Backend
+DJANGO_PORT=8000
+
+# Frontend URLs
+NEXT_PUBLIC_API_URL=https://your-domain.com/api
+NEXT_PUBLIC_WS_HOST=your-domain.com
+FRONTEND_URL=https://your-domain.com
+
+# Payment (Live Stripe keys)
+STRIPE_SECRET_KEY=sk_live_your_real_stripe_secret_key
+STRIPE_PUBLISHABLE_KEY=pk_live_your_real_stripe_publishable_key
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_your_real_stripe_publishable_key
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+
+# Ctrl+X → Y → Enter to save
+```
+
+✅ **.env.prod created!**
+
+#### **Bước 3: Install Docker & Docker Compose**
+
+```bash
 # Install Docker
 curl -fsSL https://get.docker.com -o get-docker.sh
 sudo sh get-docker.sh
 
 # Add user to docker group
-sudo usermod -aG docker $USER
+sudo usermod -aG docker deploy
 
-# Logout and login again để apply group
-exit
-ssh deploy@128.199.xxx.xxx
+# Install Docker Compose
+sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
 
-# Verify Docker
+# Verify installation
 docker --version
 # Output: Docker version 24.x.x
 
-# Install Docker Compose (v2)
-sudo apt update
-sudo apt install -y docker-compose-plugin
+docker-compose --version
+# Output: docker-compose version 1.29.x
 
-# Verify Docker Compose
-docker compose version
-# Output: Docker Compose version v2.x.x
-```
-
-✅ **Docker installed on Droplet!**
-
-#### Bước 2: Pull Code và Setup Environment
-
-```bash
-# SSH vào Droplet
+# ⚠️ IMPORTANT: Logout and login again for group changes
+exit
 ssh deploy@128.199.xxx.xxx
 
-# Pull code mới nhất (hoặc clone nếu chưa có)
-cd /opt/E-Commerce
-git pull origin main
-
-# Hoặc clone lần đầu:
-# cd /opt
-# sudo git clone https://github.com/dinhhoang235/E-Commerce.git
-# sudo chown -R deploy:deploy /opt/E-Commerce
-
-# Copy và update environment files
-cd /opt/E-Commerce
-cp backend/.env.docker backend/.env
-cp frontend/.env.local.docker frontend/.env.local
-
-# Update với thông tin production
-nano backend/.env
-# Sửa:
-# - ALLOWED_HOSTS=localhost,127.0.0.1,20.2.82.70
-# - NEXT_PUBLIC_API_URL=http://20.2.82.70/api
-# - FRONTEND_URL=http://20.2.82.70
-# - DB_HOST=mysql (giữ nguyên)
-# - REDIS_HOST=redis (giữ nguyên)
-
-nano frontend/.env.local
-# Sửa:
-# - NEXT_PUBLIC_API_URL=http://20.2.82.70/api
-# - NEXT_PUBLIC_WS_HOST=20.2.82.70
+# Verify docker group
+groups
+# Output: deploy sudo docker
 ```
 
-✅ **Environment configured!**
+✅ **Docker installed!**
 
-#### Bước 3: Start Docker Services
+#### **Bước 4: Build & Start Production Containers**
 
 ```bash
-# Tại /opt/E-Commerce
 cd /opt/E-Commerce
 
-# Build images
-docker compose build
-
-# Start all services
-docker compose up -d
-
-# Check services status
-docker compose ps
+# Build production images (first time)
+docker-compose -f docker-compose.prod.yml build --no-cache
 
 # Output:
-# NAME                   STATUS      PORTS
-# ecommerce-backend      running     0.0.0.0:8000->8000/tcp
-# ecommerce-frontend     running     0.0.0.0:3000->3000/tcp
-# ecommerce-mysql        running     0.0.0.0:3306->3306/tcp
-# ecommerce-redis        running     0.0.0.0:6379->6379/tcp
-# ecommerce-nginx        running     0.0.0.0:80->80/tcp
-
-# View logs
-docker compose logs -f backend
-docker compose logs -f frontend
-docker compose logs -f nginx
-```
-
-✅ **Docker services running!**
-
-#### Bước 4: Run Django Setup Commands
-
-```bash
-# Tại /opt/E-Commerce
-
-# Run migrations
-docker compose exec backend python manage.py migrate
-
-# Create superuser
-docker compose exec backend python manage.py createsuperuser
-
-# Seed database (optional)
-docker compose exec backend python manage.py seed_categories
-docker compose exec backend python manage.py seed_colors
-docker compose exec backend python manage.py seed_products
-docker compose exec backend python manage.py seed_productVariant
-
-# Collect static files (đã auto run nhưng có thể run lại)
-docker compose exec backend python manage.py collectstatic --noinput
-```
-
-✅ **Django setup completed!**
-
-#### Bước 5: Nginx Configuration với Docker
-
-> **Lưu ý**: File `nginx/default.conf` đã có sẵn trong repo và được mount vào nginx container qua docker-compose.yml
-
-Nginx container đã được config sẵn trong `docker-compose.yml`:
-
-```yaml
-# Đã có trong docker-compose.yml
-nginx:
-  image: nginx:alpine
-  container_name: ecommerce-nginx
-  ports:
-    - "80:80"
-  volumes:
-    - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-    - ./backend/staticfiles:/var/www/staticfiles:ro
-    - ./backend/media:/var/www/media:ro
-```
-
-Nginx config (`nginx/default.conf`) dùng Docker service names:
-
-```nginx
-# upstream backend {
-#     server backend:8000;  # ← Tên Docker service, không phải localhost
-# }
-# 
-# upstream frontend {
-#     server frontend:3000;  # ← Tên Docker service
-# }
-```
-
-**Không cần sửa gì**, config đã đúng cho Docker! Chỉ cần:
-
-```bash
-# Stop nginx host nếu đang chạy (tránh port conflict)
-sudo systemctl stop nginx
-sudo systemctl disable nginx
-
-# Nginx container sẽ handle tất cả requests
-docker compose ps nginx
-# Output: ecommerce-nginx   running   0.0.0.0:80->80/tcp
-```
-
-✅ **Nginx configured!**
-
-### 12.5 Test Full Stack với Docker
-
-```bash
-# Test từ VM
-curl http://localhost              # Nginx → Frontend
-curl http://localhost/api/products/  # Nginx → Backend API
-curl http://localhost/django-admin/  # Django Admin
-
-# Test từ local machine
-curl http://20.2.82.70
-curl http://20.2.82.70/api/products/
-
-# Hoặc mở browser:
-# http://20.2.82.70
-# http://20.2.82.70/django-admin/
-```
-
-✅ **Full stack working!**
-
-### 12.6 Docker Management Commands
-
-#### Stop/Start Services
-
-```bash
-# Stop all services
-docker compose down
+# Building db...
+# Building redis...
+# Building backend...
+# Building frontend...
+# Building nginx...
 
 # Start all services
-docker compose up -d
+docker-compose -f docker-compose.prod.yml up -d
 
-# Restart specific service
-docker compose restart backend
-docker compose restart frontend
+# Output:
+# Creating network "ecommerce_default" with driver "bridge"
+# Creating volume "ecommerce_mysql_data"
+# Creating volume "ecommerce_redis_data"
+# Creating ecommerce-db-prod
+# Creating ecommerce-redis-prod
+# Creating ecommerce-backend-prod
+# Creating ecommerce-frontend-prod
+# Creating ecommerce-nginx-prod
+
+# Check status
+docker-compose -f docker-compose.prod.yml ps
+
+# Output:
+# Name                         State    Ports
+# ecommerce-db-prod            Up       0.0.0.0:3306->3306/tcp
+# ecommerce-redis-prod         Up       6379/tcp
+# ecommerce-backend-prod       Up       8000/tcp
+# ecommerce-frontend-prod      Up       3000/tcp
+# ecommerce-nginx-prod         Up       0.0.0.0:80->80/tcp
 
 # View logs
-docker compose logs -f backend
-docker compose logs backend --tail 100
-
-# Execute command in container
-docker compose exec backend python manage.py shell
-docker compose exec mysql mysql -u admin -p e_commerce
+docker-compose -f docker-compose.prod.yml logs -f
+# Ctrl+C to exit logs
 ```
 
-#### Update Code & Rebuild
+✅ **All containers running!**
+
+#### **Bước 5: Initialize Database**
+
+```bash
+cd /opt/E-Commerce
+
+# Run migrations
+docker-compose -f docker-compose.prod.yml exec backend python manage.py migrate
+
+# Output:
+# Running migrations:
+#   Applying contenttypes.0001_initial... OK
+#   Applying auth.0001_initial... OK
+#   ...
+
+# Create superuser
+docker-compose -f docker-compose.prod.yml exec backend python manage.py createsuperuser
+
+# Follow prompts:
+# Username: admin
+# Email: admin@example.com
+# Password: ********
+# Password (again): ********
+
+# Collect static files (already done in Dockerfile, but verify)
+docker-compose -f docker-compose.prod.yml exec backend python manage.py collectstatic --noinput
+```
+
+✅ **Database initialized!**
+
+#### **Bước 6: Test Deployment**
+
+```bash
+# Test từ VPS
+curl http://localhost
+# Should return frontend HTML
+
+curl http://localhost/api/products/
+# Should return JSON API response
+
+# Test từ local machine
+curl http://128.199.xxx.xxx
+curl http://128.199.xxx.xxx/api/products/
+
+# Hoặc mở browser:
+# http://128.199.xxx.xxx
+# http://128.199.xxx.xxx/admin
+```
+
+✅ **Deployment successful!**
+
+#### **Bước 7: Setup SSL/HTTPS (Optional - Nếu có domain)**
+
+```bash
+# Install certbot
+sudo apt update
+sudo apt install -y certbot python3-certbot-nginx
+
+# Get SSL certificate
+sudo certbot --nginx -d your-domain.com -d www.your-domain.com
+
+# Follow prompts và certbot sẽ tự config Nginx
+
+# Auto-renewal
+sudo systemctl enable certbot.timer
+sudo systemctl start certbot.timer
+
+# Test renewal
+sudo certbot renew --dry-run
+```
+
+✅ **SSL configured!**
+
+---
+
+### 12.5 Docker Management Commands
+
+#### **Stop/Start Services**
+
+```bash
+cd /opt/E-Commerce
+
+# Stop all services
+docker-compose -f docker-compose.prod.yml down
+
+# Start all services
+docker-compose -f docker-compose.prod.yml up -d
+
+# Restart specific service
+docker-compose -f docker-compose.prod.yml restart backend
+docker-compose -f docker-compose.prod.yml restart frontend
+
+# View logs
+docker-compose -f docker-compose.prod.yml logs -f backend
+docker-compose -f docker-compose.prod.yml logs backend --tail 100
+
+# Execute command in container
+docker-compose -f docker-compose.prod.yml exec backend python manage.py shell
+docker-compose -f docker-compose.prod.yml exec db mysql -u root -p${MYSQL_ROOT_PASSWORD} ${MYSQL_DATABASE}
+```
+
+#### **Update Code & Rebuild**
 
 ```bash
 # Pull code mới từ GitHub
@@ -2599,136 +2164,214 @@ cd /opt/E-Commerce
 git pull origin main
 
 # Rebuild changed services
-docker compose build backend
-docker compose build frontend
+docker-compose -f docker-compose.prod.yml build backend frontend
 
 # Restart với images mới
-docker compose up -d
+docker-compose -f docker-compose.prod.yml up -d
 
 # Run migrations nếu có
-docker compose exec backend python manage.py migrate
+docker-compose -f docker-compose.prod.yml exec backend python manage.py migrate
 
 # Restart services
-docker compose restart backend frontend
+docker-compose -f docker-compose.prod.yml restart backend frontend
 ```
 
-#### View Container Stats
+#### **View Container Stats**
 
 ```bash
-# Resource usage
+# Resource usage (real-time)
 docker stats
 
 # List containers
 docker ps
+docker-compose -f docker-compose.prod.yml ps
 
 # List images
 docker images
 
 # Inspect container
-docker compose exec backend env
-docker compose exec backend ps aux
+docker-compose -f docker-compose.prod.yml exec backend env
+docker-compose -f docker-compose.prod.yml exec backend ps aux
+
+# Check container health
+docker inspect --format='{{.State.Health.Status}}' ecommerce-backend-prod
 ```
 
-### 12.7 Auto-restart Docker on Boot
+---
 
 ```bash
-# Docker containers đã có restart: unless-stopped
-# Nhưng cần ensure Docker daemon start on boot
+# Docker containers đã có restart: unless-stopped trong docker-compose.prod.yml
+# Chỉ cần ensure Docker daemon start on boot
 
 # Enable Docker service
 sudo systemctl enable docker
 
-# Start on boot
+# Start Docker daemon
 sudo systemctl start docker
 
 # Verify
 sudo systemctl status docker
+# Output: active (running)
 
-# Test reboot
+# Test reboot (optional)
 sudo reboot
 
-# Sau khi Droplet restart, check:
+# After reboot, SSH lại và check:
 ssh deploy@128.199.xxx.xxx
-docker compose ps
-# All services should be running
+docker-compose -f docker-compose.prod.yml ps
+
+# Output: All services should be UP
+# Name                         State    Ports
+# ecommerce-db-prod            Up       0.0.0.0:3306->3306/tcp
+# ecommerce-redis-prod         Up       6379/tcp
+# ecommerce-backend-prod       Up       8000/tcp
+# ecommerce-frontend-prod      Up       3000/tcp
+# ecommerce-nginx-prod         Up       0.0.0.0:80->80/tcp
 ```
 
 ✅ **Auto-restart configured!**
 
-### 12.8 Backup & Restore với Docker
+---
 
-#### Backup Database
+### 12.7 Backup & Restore với Docker
+
+#### **Backup Database**
 
 ```bash
-# Backup MySQL container
-docker compose exec mysql mysqldump -u admin -pAdmin123@ e_commerce > backup_$(date +%Y%m%d).sql
+cd /opt/E-Commerce
 
-# Hoặc backup volume
+# Option 1: Backup via mysqldump (recommended)
+docker-compose -f docker-compose.prod.yml exec db mysqldump \
+  -u admin -p${MYSQL_PASSWORD} ${MYSQL_DATABASE} > backup_$(date +%Y%m%d).sql
+
+# Option 2: Backup entire volume
 docker run --rm \
   -v ecommerce_mysql_data:/data \
   -v $(pwd):/backup \
   alpine tar czf /backup/mysql_backup_$(date +%Y%m%d).tar.gz /data
+
+# List backups
+ls -lh backup_*.sql mysql_backup_*.tar.gz
 ```
 
-#### Restore Database
+#### **Restore Database**
 
 ```bash
-# Restore SQL dump
-cat backup_20251223.sql | docker compose exec -T mysql mysql -u admin -pAdmin123@ e_commerce
+cd /opt/E-Commerce
 
-# Hoặc restore volume
+# Option 1: Restore from SQL dump
+cat backup_20260112.sql | docker-compose -f docker-compose.prod.yml exec -T db mysql \
+  -u admin -p${MYSQL_PASSWORD} ${MYSQL_DATABASE}
+
+# Option 2: Restore from volume backup
 docker run --rm \
   -v ecommerce_mysql_data:/data \
   -v $(pwd):/backup \
-  alpine tar xzf /backup/mysql_backup_20251223.tar.gz -C /
+  alpine tar xzf /backup/mysql_backup_20260112.tar.gz -C /
+  
+# Restart backend after restore
+docker-compose -f docker-compose.prod.yml restart backend
 ```
 
-### 12.9 Troubleshooting Docker
-
-#### Container không start
+#### **Automated Backup Script**
 
 ```bash
-# Check logs
-docker compose logs backend
+# Create backup script
+nano ~/backup-docker.sh
 
-# Check container status
-docker compose ps
+# Add content:
+#!/bin/bash
+BACKUP_DIR="$HOME/backups"
+DATE=$(date +%Y%m%d_%H%M%S)
+mkdir -p $BACKUP_DIR
 
-# Rebuild image
-docker compose build --no-cache backend
-docker compose up -d backend
+# Backup database
+cd /opt/E-Commerce
+docker-compose -f docker-compose.prod.yml exec -T db mysqldump \
+  -u admin -p${MYSQL_PASSWORD} ${MYSQL_DATABASE} > $BACKUP_DIR/db_$DATE.sql
+
+# Backup media files
+tar -czf $BACKUP_DIR/media_$DATE.tar.gz -C /opt/E-Commerce/backend media/
+
+# Keep only last 7 days
+find $BACKUP_DIR -name "db_*.sql" -mtime +7 -delete
+find $BACKUP_DIR -name "media_*.tar.gz" -mtime +7 -delete
+
+echo "Backup completed: $BACKUP_DIR"
+
+# Save and exit (Ctrl+X → Y → Enter)
+chmod +x ~/backup-docker.sh
+
+# Test backup
+~/backup-docker.sh
+
+# Add to crontab (daily at 2 AM)
+crontab -e
+# Add: 0 2 * * * /home/deploy/backup-docker.sh >> /home/deploy/backup.log 2>&1
 ```
 
-#### Port conflicts
+✅ **Backup configured!**
+
+---
+
+### 12.8 Troubleshooting Docker
+
+#### **Container không start**
+
+```bash
+cd /opt/E-Commerce
+
+# Check logs
+docker-compose -f docker-compose.prod.yml logs backend
+
+# Check container status
+docker-compose -f docker-compose.prod.yml ps
+
+# Rebuild image
+docker-compose -f docker-compose.prod.yml build --no-cache backend
+docker-compose -f docker-compose.prod.yml up -d backend
+```
+
+#### **Port conflicts**
 
 ```bash
 # Check port usage
-sudo ss -tlnp | grep 8000
+sudo ss -tlnp | grep -E '80|3000|8000|3306'
 
-# Stop conflicting service
-sudo supervisorctl stop ecommerce-backend  # Traditional deployment
-sudo systemctl stop nginx                   # Host nginx
+# Stop conflicting services
+sudo supervisorctl stop ecommerce-backend  # If traditional deployment exists
+sudo systemctl stop nginx                   # If host nginx running
+sudo systemctl stop mysql                   # If host MySQL running
 
 # Restart Docker containers
-docker compose restart
+docker-compose -f docker-compose.prod.yml restart
 ```
 
-#### Database connection errors
+#### **Database connection errors**
 
 ```bash
-# Check MySQL container
-docker compose logs mysql
+cd /opt/E-Commerce
 
-# Check network
-docker compose exec backend ping mysql
+# Check MySQL container
+docker-compose -f docker-compose.prod.yml logs db
+
+# Check network connectivity
+docker-compose -f docker-compose.prod.yml exec backend ping db
 
 # Check environment variables
-docker compose exec backend env | grep DB_
+docker-compose -f docker-compose.prod.yml exec backend env | grep DB_
+
+# Restart database
+docker-compose -f docker-compose.prod.yml restart db backend
 ```
 
-#### Out of disk space
+#### **Out of disk space**
 
 ```bash
+# Check disk usage
+df -h
+docker system df
+
 # Remove unused images
 docker image prune -a
 
@@ -2738,48 +2381,49 @@ docker volume prune
 # Remove unused containers
 docker container prune
 
-# Check disk usage
-df -h
-docker system df
+# Clean everything (careful!)
+docker system prune -a --volumes
 ```
 
-### 12.10 So Sánh: Traditional vs Docker Deployment
+#### **View detailed container logs**
 
-| Feature | Traditional (Manual) | Docker |
-|---------|---------------------|--------|
-| **Setup Time** | 1-2 giờ | 30 phút |
-| **Update Code** | `git pull` + restart services | `git pull` + `docker compose up -d` |
-| **Dependencies** | Cài manual từng cái | Docker images có sẵn |
-| **Rollback** | Phức tạp | `git checkout` + rebuild |
-| **Environment** | Phụ thuộc VM OS | Consistent mọi nơi |
-| **Resource** | Ít overhead | Hơi nhiều (containers) |
-| **Debugging** | SSH + logs | `docker exec` + logs |
-| **Port Conflicts** | Dễ xảy ra | Isolated |
-| **Team Work** | Setup khác nhau | Giống nhau (Dockerfile) |
-| **Learning** | Hiểu Linux sâu | Hiểu Docker |
-
-### 12.11 Best Practices Docker Deployment
-
-✅ **Development:**
 ```bash
-# Dùng docker-compose với hot reload
-docker compose -f docker-compose.dev.yml up
+cd /opt/E-Commerce
+
+# Backend logs
+docker-compose -f docker-compose.prod.yml logs backend --tail 200
+
+# Frontend logs
+docker-compose -f docker-compose.prod.yml logs frontend --tail 200
+
+# Nginx logs
+docker-compose -f docker-compose.prod.yml logs nginx --tail 200
+
+# All logs
+docker-compose -f docker-compose.prod.yml logs --tail 200
 ```
 
-✅ **Staging:**
-```bash
-# Dùng docker-compose production
-docker compose up -d
-```
+✅ **Troubleshooting guide complete!**
 
-✅ **Production:**
-```bash
-# Thêm health checks
-# Thêm resource limits
-# Setup monitoring (Prometheus, Grafana)
-# Setup automated backups
-# Setup CI/CD pipeline
-```
+## 🎯 BƯỚC 12 Summary
+
+**Docker deployment đã complete với:**
+1. ✅ Development và Production Dockerfiles riêng biệt
+2. ✅ Quick start local development (30 giây)
+3. ✅ Production VPS deployment guide (7 bước rõ ràng)
+4. ✅ Docker management commands đầy đủ
+5. ✅ Auto-restart on boot
+6. ✅ Backup & restore scripts
+7. ✅ Troubleshooting guide
+8. ✅ So sánh Traditional vs Docker
+9. ✅ Best practices và security checklist
+
+**Next Steps:**
+- Muốn auto-deploy khi push code? → Xem **BƯỚC 13: CI/CD với GitHub Actions**
+- Muốn scale horizontally? → Xem Docker Swarm hoặc Kubernetes
+- Muốn monitoring? → Setup Prometheus + Grafana
+
+
 
 ---
 
@@ -3393,51 +3037,3 @@ jobs:
 - Rollback frequency
 - Downtime during deployment
 ```
-
----
-
-## �📊 Summary: Deployment Options
-
-Bạn có **3 cách deploy**:
-
-### 1️⃣ Traditional Manual (BƯỚC 1-11)
-- ✅ Full control
-- ✅ Hiểu Linux sâu
-- ✅ Resource efficient
-- ❌ Setup phức tạp
-- ❌ Update code cần nhiều bước
-
-**Khi nào dùng**: Learning, debugging, small apps
-
-### 2️⃣ Docker Compose (BƯỚC 12)
-- ✅ Setup nhanh (30 phút)
-- ✅ Update dễ (`git pull` + `docker compose up`)
-- ✅ Consistent environment
-- ❌ Overhead (RAM/CPU)
-- ❌ Debugging hơi khó hơn
-
-**Khi nào dùng**: Team work, multiple environments, production
-
-### 3️⃣ Hybrid (Traditional + Docker)
-- ✅ Dùng Docker cho apps
-- ✅ Dùng host nginx/SSL
-- ✅ Easy debugging (SSH)
-- ✅ Best of both worlds
-
-**Khi nào dùng**: Production với full control
-
----
-
-## 🎯 Recommendation
-
-**Bước học:**
-1. ✅ **Bắt đầu với Traditional** (BƯỚC 1-11) → Hiểu cơ chế
-2. ✅ **Chuyển sang Docker** (BƯỚC 12) → Production ready
-3. ✅ **Setup CI/CD** (GitHub Actions) → Auto deploy
-
-**Production:**
-- Small app (< 1000 users): Traditional hoặc Docker đều OK
-- Medium app (1K-10K users): Docker + monitoring
-- Large app (> 10K users): Kubernetes + auto-scaling
-
----
