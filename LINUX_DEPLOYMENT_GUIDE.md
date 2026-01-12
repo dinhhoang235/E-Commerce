@@ -1,63 +1,37 @@
-# 🚀 Azure VM Deployment Guide - E-Commerce Platform (Traditional Linux Approach)
+# 🚀 DigitalOcean Droplet Deployment Guide - E-Commerce Platform (Traditional Linux Approach)
 
-> **Mục đích**: Deploy ứng dụng E-Commerce lên Azure VM (Ubuntu 22.04) sử dụng SSH, Nginx, Gunicorn, và Supervisor
+> **Mục đích**: Deploy ứng dụng E-Commerce lên DigitalOcean Droplet (Ubuntu 22.04) sử dụng SSH, Nginx, Gunicorn, và Supervisor
 > 
 > **Dành cho**: Developers biết Linux, SSH, và muốn hiểu Deep cách deploy thực tế
 >
-> **⏱️ Thời gian**: ~1 giờ setup + 30 phút troubleshooting = ~1.5 giờ tổng cộng  
-> **💰 Chi phí**: ~$15-30/tháng (B1s VM) - rẻ hơn Container Apps  
-> **🎯 Tại sao VM**: Control tuyệt đối, học hỏi Linux sâu, flexible scaling
+> **⏱️ Thời gian**: ~45 phút setup + 15 phút troubleshooting = ~1 giờ tổng cộng  
+> **💰 Chi phí**: ~$6-12/tháng (Basic Droplet) - rẻ nhất thị trường  
+> **🎯 Tại sao DigitalOcean**: Simple, rẻ, documentation tốt, community lớn
 
 ---
 
 ## 📋 Mục Lục
 
-1. [So Sánh: Container Apps vs VM](#-so-sánh-container-apps-vs-vm)
-2. [Architecture](#-architecture)
-3. [Yêu Cầu](#-yêu-cầu)
-4. [BƯỚC 1: Tạo Azure VM](#bước-1-tạo-azure-vm)
-5. [BƯỚC 2: Setup Initial Linux](#bước-2-setup-initial-linux)
-6. [BƯỚC 3: Cài Dependencies](#bước-3-cài-dependencies)
-7. [BƯỚC 4: Deploy Backend (Django + Gunicorn)](#bước-4-deploy-backend-django--gunicorn)
-8. [BƯỚC 5: Deploy Frontend (Next.js)](#bước-5-deploy-frontend-nextjs)
-9. [BƯỚC 6: Setup Nginx Reverse Proxy](#bước-6-setup-nginx-reverse-proxy)
-10. [BƯỚC 7: Setup SSL/HTTPS (Let's Encrypt)](#bước-7-setup-ssltls-letsencrypt)
-11. [BƯỚC 8: Database Setup](#bước-8-database-setup)
-12. [BƯỚC 9: Storage (Azure Blob)](#bước-9-storage-azure-blob)
-13. [BƯỚC 10: Monitoring & Logs](#bước-10-monitoring--logs)
-14. [BƯỚC 11: Auto-restart & Systemd](#bước-11-auto-restart--systemd)
+1. [Architecture](#-architecture)
+2. [Yêu Cầu](#-yêu-cầu)
+3. [BƯỚC 1: Tạo DigitalOcean Droplet](#bước-1-tạo-digitalocean-droplet)
+4. [BƯỚC 2: Setup Initial Linux](#bước-2-setup-initial-linux)
+5. [BƯỚC 3: Cài Dependencies](#bước-3-cài-dependencies)
+6. [BƯỚC 4: Deploy Backend (Django + Gunicorn)](#bước-4-deploy-backend-django--gunicorn)
+7. [BƯỚC 5: Deploy Frontend (Next.js)](#bước-5-deploy-frontend-nextjs)
+8. [BƯỚC 6: Setup Nginx Reverse Proxy](#bước-6-setup-nginx-reverse-proxy)
+9. [BƯỚC 7: Setup SSL/HTTPS (Let's Encrypt)](#bước-7-setup-ssltls-letsencrypt)
+10. [BƯỚC 8: Database Setup](#bước-8-database-setup)
+11. [BƯỚC 9: Storage Setup (Local Media)](#bước-9-storage-setup-local-media-files)
+12. [BƯỚC 10: Monitoring & Logs](#bước-10-monitoring--logs)
+13. [BƯỚC 11: Auto-restart & Systemd](#bước-11-auto-restart--systemd)
 
----
-
-## 📊 So Sánh: Container Apps vs VM
-
-| Tiêu Chí | Container Apps | VM (Traditional) |
-|---------|-----------------|-----------------|
-| **Setup Time** | 20 phút | 1-2 giờ |
-| **Complexity** | Dễ (CLI commands) | Khó (Linux config) |
-| **Control** | Limited | Tuyệt đối |
-| **Learning Value** | Không nhiều | Rất cao |
-| **Cost** | $1.50/test | $15-30/tháng |
-| **Scaling** | Auto | Manual/Script |
-| **SSH Access** | Hạn chế | Đầy đủ |
-| **Debugging** | Khó | Dễ |
-| **Production Ready** | Có | Có |
-| **Job Market** | Ít | Rất nhiều |
-
-**Khi dùng VM:**
-- ✅ Muốn hiểu Linux sâu
-- ✅ Muốn learning path chuyên nghiệp
-- ✅ Muốn full control
-- ✅ Budget limited ($15/tháng)
-- ✅ Dự án nhỏ/startup
-
----
 
 ## 🏗️ Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                         Azure VM (Ubuntu 22.04)             │
+│                   DigitalOcean Droplet (Ubuntu 22.04)       │
 │                                                              │
 │  ┌────────────────────────────────────────────────────┐    │
 │  │ Frontend (Next.js)                                 │    │
@@ -78,8 +52,8 @@
 │    Port 3306              Port 6379                        │
 │                                                              │
 │  ┌────────────────────────────────────────────────────┐    │
-│  │ Blob Storage (Azure) - Images, Files               │    │
-│  │ cdn.example.com/media                              │    │
+│  │ Media Storage (Local VPS) - /var/www/backend/media │    │
+│  │ Served via Nginx                                   │    │
 │  └────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -97,7 +71,7 @@ Frontend (Next.js) ← → Backend API (Django)
     ↓                      ↓
     |              ┌───────┼───────┐
     |              ↓       ↓       ↓
-    └──→ MySQL  Redis  Blob Storage
+    └──→ MySQL  Redis  Media (Local)
 ```
 
 ---
@@ -113,168 +87,158 @@ Frontend (Next.js) ← → Backend API (Django)
 
 **Tools:**
 - ✅ SSH client (Terminal/PowerShell)
-- ✅ Azure CLI (để tạo VM)
+- ✅ DigitalOcean CLI - `doctl` (optional, có thể dùng Web UI)
 - ✅ Text editor (VSCode remote SSH là tốt)
 
-**Azure Resources:**
-- ✅ Azure account (free tier OK)
-- ✅ Resource group
-- ✅ Virtual Machine (Ubuntu 22.04 LTS)
-- ✅ (Optional) Azure Database for MySQL
-- ✅ (Optional) Azure Cache for Redis
-- ✅ Storage Account (Blob)
+**DigitalOcean Resources:**
+- ✅ DigitalOcean account (free $200 credit cho 60 ngày)
+- ✅ Droplet (Ubuntu 22.04 LTS) - 2GB RAM recommended
+- ✅ (Optional) Managed Database for MySQL
+- ✅ (Optional) Managed Redis
 
 ---
 
-## BƯỚC 1: Tạo Azure VM
+## BƯỚC 1: Tạo DigitalOcean Droplet
 
-### 1.1 Chuẩn Bị Variables
+### 1.1 Option A: Tạo Droplet qua Web UI (Recommended cho người mới)
+
+1. **Đăng nhập**: Vào [cloud.digitalocean.com](https://cloud.digitalocean.com)
+2. **Tạo Droplet**: Click "Create" → "Droplets"
+3. **Chọn Image**: Ubuntu 22.04 LTS (x64)
+4. **Chọn Size**: 
+   - **Basic Plan** → Regular (Disk type: SSD)
+   - **CPU Option**: Regular Intel
+   - **Droplet Size**: `$6/month` (1GB RAM, 1 vCPU, 25GB SSD) hoặc `$12/month` (2GB RAM, 1 vCPU, 50GB SSD)
+5. **Chọn Region**: Singapore (sgp1) hoặc gần bạn nhất
+6. **Authentication**: 
+   - Chọn "Password"
+   - Nhập password mạnh (ít nhất 12 ký tự, bao gồm chữ hoa, chữ thường, số, ký tự đặc biệt)
+   - **Lưu password này lại!** Bạn sẽ cần nó để SSH vào server
+7. **Hostname**: `ecommerce-droplet`
+8. **Tags**: `ecommerce`, `production`
+9. Click **"Create Droplet"**
+
+⏱️ **Chờ ~55 giây** → Droplet sẽ sẵn sàng!
+
+✅ **Droplet created via Web UI!**
+
+### 1.2 Option B: Tạo Droplet qua CLI (Advanced)
 
 ```bash
+# Install doctl
+# macOS:
+brew install doctl
+
+# Linux:
+cd ~
+wget https://github.com/digitalocean/doctl/releases/download/v1.94.0/doctl-1.94.0-linux-amd64.tar.gz
+tar xf doctl-1.94.0-linux-amd64.tar.gz
+sudo mv doctl /usr/local/bin
+
+# Authenticate (lấy token tại: https://cloud.digitalocean.com/account/api/tokens)
+doctl auth init
+# Paste API token khi được hỏi
+
 # Set variables
-RESOURCE_GROUP="ecommerce-rg"
-VM_NAME="ecommerce-vm"
-LOCATION="eastasia"
-IMAGE="UbuntuLTS"
-SIZE="Standard_B2s"  # 2 vCPU, 4GB RAM (đủ cho dev/staging)
-ADMIN_USERNAME="azureuser"
-SSH_KEY_PATH="$HOME/.ssh/id_rsa.pub"
+DROPLET_NAME="ecommerce-droplet"
+REGION="sgp1"  # Singapore
+SIZE="s-1vcpu-2gb"  # $12/month: 1 vCPU, 2GB RAM, 50GB SSD
+IMAGE="ubuntu-22-04-x64"
 
-# Nếu chưa có SSH key, tạo:
-# ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ""
-```
-
-### 1.2 Tạo Resource Group
-
-```bash
-az group create \
-  --name $RESOURCE_GROUP \
-  --location $LOCATION
-
-# Output:
-# {
-#   "id": "/subscriptions/.../resourceGroups/ecommerce-rg",
-#   "location": "eastasia",
-#   "name": "ecommerce-rg",
-#   "properties": {
-#     "provisioningState": "Succeeded"
-#   }
-# }
-```
-
-✅ **Resource Group created!**
-
-### 1.3 Tạo Network Security Group (Firewall)
-
-```bash
-az network nsg create \
-  --resource-group $RESOURCE_GROUP \
-  --name ecommerce-nsg
-
-# Add rules
-az network nsg rule create \
-  --resource-group $RESOURCE_GROUP \
-  --nsg-name ecommerce-nsg \
-  --name allow-ssh \
-  --priority 1000 \
-  --source-address-prefixes '*' \
-  --destination-address-prefixes '*' \
-  --access Allow \
-  --protocol Tcp \
-  --destination-port-ranges 22
-
-az network nsg rule create \
-  --resource-group $RESOURCE_GROUP \
-  --nsg-name ecommerce-nsg \
-  --name allow-http \
-  --priority 1001 \
-  --access Allow \
-  --protocol Tcp \
-  --destination-port-ranges 80
-
-az network nsg rule create \
-  --resource-group $RESOURCE_GROUP \
-  --nsg-name ecommerce-nsg \
-  --name allow-https \
-  --priority 1002 \
-  --access Allow \
-  --protocol Tcp \
-  --destination-port-ranges 443
-```
-
-✅ **Firewall rules created!**
-
-### 1.4 Tạo Virtual Network (VNet)
-
-```bash
-az network vnet create \
-  --resource-group $RESOURCE_GROUP \
-  --name ecommerce-vnet \
-  --address-prefix 10.0.0.0/16 \
-  --subnet-name default \
-  --subnet-prefix 10.0.0.0/24
-
-# Output:
-# {
-#   "newVNet": {
-#     "addressSpace": {
-#       "addressPrefixes": [
-#         "10.0.0.0/16"
-#       ]
-#     },
-#     "id": "...",
-#     "name": "ecommerce-vnet",
-#     ...
-#   }
-# }
-```
-
-✅ **VNet created!**
-
-### 1.5 Tạo VM
-
-```bash
-az vm create \
-  --resource-group $RESOURCE_GROUP \
-  --name $VM_NAME \
-  --image $IMAGE \
+# Create droplet (sẽ gửi password qua email)
+doctl compute droplet create $DROPLET_NAME \
+  --region $REGION \
   --size $SIZE \
-  --admin-username $ADMIN_USERNAME \
-  --ssh-key-values $SSH_KEY_PATH \
-  --nsg ecommerce-nsg \
-  --vnet-name ecommerce-vnet \
-  --subnet default \
-  --public-ip-sku Standard \
-  --os-disk-size-gb 64 \
-  --os-disk-name ecommerce-osdisk
+  --image $IMAGE \
+  --tag-names ecommerce,production \
+  --wait
 
 # Output:
-# {
-#   "fqdns": "",
-#   "id": "/subscriptions/.../resourceGroups/ecommerce-rg/providers/Microsoft.Compute/virtualMachines/ecommerce-vm",
-#   "identity": null,
-#   "location": "eastasia",
-#   "macAddress": "00:0D:3A:...",
-#   "powerState": "VM running",
-#   "privateIpAddress": "10.0.0.4",
-#   "publicIpAddress": "20.195.xxx.xxx",  ← ⭐ GHI LẠI IP NÀY
-#   "resourceGroup": "ecommerce-rg",
-#   "zones": []
-# }
+# ID          Name        FingerPrint
+# 12345678    my-laptop   xx:xx:xx:...
+
+# Set variables
+DROPLET_NAME="ecommerce-droplet"
+REGION="sgp1"  # Singapore
+SIZE="s-1vcpu-2gb"  # $12/month: 1 vCPU, 2GB RAM, 50GB SSD
+IMAGE="ubuntu-22-04-x64"
+
+# Create droplet (sẽ gửi password qua email)
+doctl compute droplet create $DROPLET_NAME \
+  --region $REGION \
+  --size $SIZE \
+  --image $IMAGE \
+  --tag-names ecommerce,production \
+  --wait
+
+# Output:
+# ID           Name                 Public IPv4      Status
+# 123456789    ecommerce-droplet    128.199.xxx.xxx  active
+
+# Get droplet info
+doctl compute droplet get 123456789
+
+# Or list all droplets
+doctl compute droplet list
 ```
 
-✅ **VM created!**
-💾 **Lưu public IP: `20.195.xxx.xxx`**
+> **⚠️ Lưu ý**: Root password sẽ được gửi qua email đã đăng ký với DigitalOcean
+
+✅ **Droplet created via CLI!**
+
+### 1.3 Lấy Public IP
+
+```bash
+# Từ Web UI: Vào Droplets → Click vào droplet → Xem "ipv4"
+# Từ CLI:
+doctl compute droplet list --format Name,PublicIPv4
+
+# Output:
+# Name                 Public IPv4
+# ecommerce-droplet    128.199.xxx.xxx
+```
+
+💾 **Lưu public IP: `128.199.xxx.xxx`**
+
+### 1.4 Setup Firewall (Cloud Firewall)
+
+```bash
+# Option A: Via Web UI
+# 1. Vào "Networking" → "Firewalls"
+# 2. Click "Create Firewall"
+# 3. Name: "ecommerce-firewall"
+# 4. Inbound Rules:
+#    - SSH (22) → All IPv4, All IPv6
+#    - HTTP (80) → All IPv4, All IPv6
+#    - HTTPS (443) → All IPv4, All IPv6
+# 5. Outbound Rules: All TCP, All UDP, All ICMP
+# 6. Apply to Droplets: ecommerce-droplet
+# 7. Click "Create Firewall"
+
+# Option B: Via CLI
+doctl compute firewall create \
+  --name ecommerce-firewall \
+  --inbound-rules "protocol:tcp,ports:22,address:0.0.0.0/0,address:::/0 protocol:tcp,ports:80,address:0.0.0.0/0,address:::/0 protocol:tcp,ports:443,address:0.0.0.0/0,address:::/0" \
+  --outbound-rules "protocol:tcp,ports:all,address:0.0.0.0/0,address:::/0 protocol:udp,ports:all,address:0.0.0.0/0,address:::/0 protocol:icmp,address:0.0.0.0/0,address:::/0" \
+  --droplet-ids 123456789
+
+# Verify
+doctl compute firewall list
+```
+
+✅ **Firewall created!**
 
 ---
 
 ## BƯỚC 2: Setup Initial Linux
 
-### 2.1 SSH vào VM
+### 2.1 SSH vào Droplet
 
 ```bash
-# Thay IP bằng public IP từ output trên
-ssh azureuser@20.195.xxx.xxx
+# Thay IP bằng public IP của Droplet
+ssh root@128.199.xxx.xxx
+
+# Nhập password khi được hỏi (từ email hoặc password đã đặt khi tạo Droplet)
 
 # Nếu được hỏi "Are you sure want to continue?"
 # → Type: yes
@@ -282,12 +246,39 @@ ssh azureuser@20.195.xxx.xxx
 # Output:
 # Welcome to Ubuntu 22.04.1 LTS (GNU/Linux 5.15.0-... x86_64)
 # ...
-# azureuser@ecommerce-vm:~$
+# root@ecommerce-droplet:~#
 ```
 
 ✅ **SSH login successful!**
 
-### 2.2 Update System
+> **Note**: DigitalOcean mặc định dùng user `root`. Sau này ta sẽ tạo user mới để bảo mật hơn.
+
+### 2.2 Tạo Non-root User (Security Best Practice)
+
+```bash
+# Tạo user mới
+adduser deploy
+# Nhập password khi được hỏi (tạo password mới cho user deploy)
+# Các câu hỏi khác có thể Enter để skip
+
+# Add user vào sudo group
+usermod -aG sudo deploy
+
+# Switch sang user mới
+su - deploy
+
+# Test sudo
+sudo ls -la /root
+# Nhập password của user deploy
+
+# Output: Nếu thấy files → sudo working!
+```
+
+✅ **Non-root user created!**
+
+> **Lưu ý**: Từ giờ dùng `ssh deploy@128.199.xxx.xxx` thay vì root
+
+### 2.3 Update System
 
 ```bash
 # Update packages
@@ -314,7 +305,9 @@ date
 
 ✅ **System updated!**
 
-### 2.3 Setup Firewall (UFW)
+### 2.4 Setup Firewall (UFW)
+
+> **Note**: UFW là software firewall trên server. DigitalOcean Cloud Firewall đã được setup ở BƯỚC 1.5
 
 ```bash
 # Enable firewall
@@ -341,21 +334,21 @@ sudo ufw status
 
 ✅ **Firewall configured!**
 
-### 2.4 Create App Directory
+### 2.5 Create App Directory
 
 ```bash
 # Tạo thư mục chứa apps
 sudo mkdir -p /var/www
 
-# Set permissions
-sudo chown -R azureuser:azureuser /var/www
+# Set permissions (thay azureuser thành deploy)
+sudo chown -R deploy:deploy /var/www
 chmod -R 755 /var/www
 
 # Verify
 ls -la /var/www
 # Output:
-# drwxr-xr-x  2 azureuser azureuser 4096 Dec 16 10:00 .
-# drwxr-xr-x 13 root      root      4096 Dec 16 09:55 ..
+# drwxr-xr-x  2 deploy deploy 4096 Jan 12 10:00 .
+# drwxr-xr-x 13 root   root   4096 Jan 12 09:55 ..
 ```
 
 ✅ **Directories created!**
@@ -436,7 +429,7 @@ sudo systemctl status mysql
 mysql --version
 # Output: mysql  Ver 8.0.X...
 
-# Option B: Dùng Azure Database for MySQL (nếu muốn)
+# Option B: Dùng DigitalOcean Managed MySQL (xem BƯỚC 8 Option B)
 # → Skip MySQL install, config connection string thay vào
 ```
 
@@ -527,7 +520,7 @@ certbot --version
 # Clone toàn bộ repo vào /opt/E-Commerce
 cd /opt
 sudo git clone https://github.com/dinhhoang235/E-Commerce.git
-sudo chown -R azureuser:azureuser /opt/E-Commerce
+sudo chown -R deploy:deploy /opt/E-Commerce
 
 # Tạo symlink cho backend và frontend
 sudo ln -s /opt/E-Commerce/backend /var/www/backend
@@ -600,7 +593,7 @@ nano /var/www/backend/.env
 # Add content 
 DEBUG=False
 SECRET_KEY=...
-ALLOWED_HOSTS=localhost,127.0.0.1,20.195.xxx.xxx,example.com
+ALLOWED_HOSTS=localhost,127.0.0.1,128.199.xxx.xxx,example.com
 
 # Database setting
 DB_ENGINE=django.db.backends.mysql
@@ -635,20 +628,17 @@ STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key_here
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key_here
 STRIPE_WEBHOOK_SECRET=whsec_test_your_webhook_secret_here
 
-# Azure Blob Storage (sẽ config ở BƯỚC 9)
-AZURE_STORAGE_ACCOUNT_NAME=yourstorageaccount
-AZURE_STORAGE_ACCOUNT_KEY=your-account-key
-AZURE_CONTAINER_NAME=media
-AZURE_CUSTOM_DOMAIN=yourstorageaccount.blob.core.windows.net
+# Media files được serve từ local VPS (xem BƯỚC 9)
+# Không cần object storage credentials
 
 # Ctrl+X → Y → Enter để save
 ```
 
 ⚠️ **QUAN TRỌNG**:
 
-- Thay `DB_PASSWORD` từ `admin123` → **strong password** cho production
+- Thay `DB_PASSWORD` từ `Admin123@` → **strong password** cho production
 - Thay `STRIPE_SECRET_KEY` → real Stripe keys
-- Thay `20.195.xxx.xxx` → public IP của VM bạn
+- Thay `128.199.xxx.xxx` → public IP của Droplet bạn
 - Nếu có domain, thay `example.com` vào `ALLOWED_HOSTS`
 
 ✅ **.env file created!**
@@ -721,7 +711,7 @@ gunicorn --bind 0.0.0.0:8000 backend.wsgi:application
 # Mở terminal khác test:
 curl http://localhost:8000/api/products/
 # Hoặc từ local machine:
-# curl http://20.195.xxx.xxx:8000/api/products/
+# curl http://128.199.xxx.xxx:8000/api/products/
 
 # Ctrl+C để stop
 ```
@@ -738,7 +728,7 @@ sudo nano /etc/supervisor/conf.d/ecommerce-backend.conf
 [program:ecommerce-backend]
 directory=/var/www/backend
 command=/var/www/backend/venv/bin/gunicorn --workers 4 --worker-class sync --bind 127.0.0.1:8000 --access-logfile /var/log/ecommerce-backend-access.log --error-logfile /var/log/ecommerce-backend-error.log backend.wsgi:application
-user=azureuser
+user=deploy
 autostart=true
 autorestart=true
 stopwaitsecs=10
@@ -872,7 +862,7 @@ npm run start
 #  ✓ Ready in 0.5s
 
 # Test từ local machine:
-# curl http://20.195.xxx.xxx:3000
+# curl http://128.199.xxx.xxx:3000
 
 # Ctrl+C để stop
 ```
@@ -904,17 +894,17 @@ pm2 status
 pm2 save
 
 # Setup systemd integration
-sudo pm2 startup systemd -u azureuser --hp /home/azureuser
+sudo pm2 startup systemd -u deploy --hp /home/deploy
 
 # Output:
-# [PM2] Creating /etc/systemd/system/pm2-azureuser.service
+# [PM2] Creating /etc/systemd/system/pm2-deploy.service
 # [PM2] systemctl daemon-reload
 # [PM2] Loaded PM2 startup script in systemd:
 #
 # [PM2] Service started. System will start PM2 on boot.
 
 # Verify
-sudo systemctl status pm2-azureuser
+sudo systemctl status pm2-deploy
 # Output: active (running)
 
 # View logs
@@ -1023,10 +1013,10 @@ sudo systemctl status nginx
 curl http://localhost
 
 # Test từ local machine
-curl http://20.195.xxx.xxx
+curl http://128.199.xxx.xxx
 
 # Hoặc mở browser:
-# http://20.195.xxx.xxx
+# http://128.199.xxx.xxx
 
 # Nếu thấy frontend homepage → ✅ Success!
 # Nếu error → check logs:
@@ -1040,8 +1030,8 @@ sudo tail -f /var/log/nginx/error.log
 ### 7.1 Setup Domain (Nếu Có)
 
 ```bash
-# Nếu bạn có domain, point DNS tới VM's public IP
-# Ví dụ: example.com → 20.195.xxx.xxx
+# Nếu bạn có domain, point DNS tới Droplet's public IP
+# Ví dụ: example.com → 128.199.xxx.xxx
 
 # Verify DNS
 dig example.com
@@ -1059,7 +1049,7 @@ curl http://example.com
 sudo certbot --nginx -d example.com
 
 # Hoặc dùng IP (self-signed, không recommended cho production):
-sudo certbot certonly --standalone -d 20.195.xxx.xxx
+sudo certbot certonly --standalone -d 128.199.xxx.xxx
 
 # Certbot sẽ auto-update Nginx config
 # Output:
@@ -1098,140 +1088,191 @@ sudo certbot renew --dry-run
 
 ✅ MySQL local is running
 
-### Option B: Azure Database for MySQL (Managed)
+### Option B: DigitalOcean Managed Database for MySQL
 
 ```bash
-# Create Azure MySQL server
-MYSQL_SERVER="ecommerce-mysql-$(date +%s)"
-MYSQL_ADMIN="admin"
-MYSQL_PASSWORD="YourSecurePassword123!@#"
+# Via Web UI (Recommended):
+# 1. Vào "Databases" → "Create Database Cluster"
+# 2. Database Engine: MySQL 8
+# 3. Plan: Basic ($15/month - 1GB RAM, 1 vCPU, 10GB Storage)
+# 4. Datacenter: Singapore (sgp1) - same region as Droplet
+# 5. Database cluster name: ecommerce-mysql-db
+# 6. Tags: ecommerce, production
+# 7. Click "Create Database Cluster"
 
-az mysql flexible-server create \
-  --resource-group $RESOURCE_GROUP \
-  --name $MYSQL_SERVER \
-  --location $LOCATION \
-  --admin-user $MYSQL_ADMIN \
-  --admin-password $MYSQL_PASSWORD \
-  --sku-name Standard_B1s \
-  --storage-size 32 \
-  --tier Burstable
+# Via CLI:
+doctl databases create ecommerce-mysql-db \
+  --engine mysql \
+  --region sgp1 \
+  --size db-s-1vcpu-1gb \
+  --version 8
+
+# Wait ~10 minutes for provisioning...
+
+# Get connection info
+doctl databases connection ecommerce-mysql-db
 
 # Output:
-# {
-#   "fullyQualifiedDomainName": "ecommerce-mysql-1734351234.mysql.database.azure.com",
-#   ...
-# }
+# host      = ecommerce-mysql-db-do-user-123456-0.b.db.ondigitalocean.com
+# port      = 25060
+# user      = doadmin
+# password  = random_generated_password
+# database  = defaultdb
+# sslmode   = require
 
-# Get hostname
-MYSQL_HOST="ecommerce-mysql-1734351234.mysql.database.azure.com"
+# Add Droplet to trusted sources
+doctl databases firewalls append ecommerce-mysql-db \
+  --rule ip_addr:128.199.xxx.xxx
 
-# Allow VM to connect
-az mysql flexible-server firewall-rule create \
-  --resource-group $RESOURCE_GROUP \
-  --name $MYSQL_SERVER \
-  --rule-name allow-vm \
-  --start-ip-address 10.0.0.4 \
-  --end-ip-address 10.0.0.4
+# Or via Web UI:
+# 1. Click vào database cluster
+# 2. "Settings" → "Trusted Sources"
+# 3. Add: ecommerce-droplet
+
+# Create database
+mysql -h ecommerce-mysql-db-do-user-123456-0.b.db.ondigitalocean.com \
+  -P 25060 \
+  -u doadmin \
+  -p \
+  --ssl-mode=REQUIRED \
+  -e "CREATE DATABASE e_commerce CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
 # Update .env
 nano /var/www/backend/.env
 # Change:
-# DB_HOST=ecommerce-mysql-1734351234.mysql.database.azure.com
-# DB_PASSWORD=YourSecurePassword123!@#
-
-# Create database
-mysql -h $MYSQL_HOST -u $MYSQL_ADMIN -p \
-  -e "CREATE DATABASE ecommerce_db CHARACTER SET utf8mb4;"
+# DB_HOST=ecommerce-mysql-db-do-user-123456-0.b.db.ondigitalocean.com
+# DB_PORT=25060
+# DB_USER=doadmin
+# DB_PASSWORD=random_generated_password
 
 # Restart backend
 sudo supervisorctl restart ecommerce-backend
 ```
 
+✅ **Managed MySQL setup!**
+
 ---
 
-## BƯỚC 9: Storage (Azure Blob)
+## BƯỚC 9: Storage Setup (Local Media Files)
 
-### 9.1 Create Storage Account
+> **Note**: Trong setup này, media files sẽ được lưu trực tiếp trên VPS thay vì dùng object storage. Phù hợp cho:
+> - Dự án nhỏ/vừa
+> - Budget hạn chế
+> - Ít file upload
+> - Không cần CDN
 
-```bash
-STORAGE_ACCOUNT="ecommercestorage$(date +%s)"
-
-az storage account create \
-  --resource-group $RESOURCE_GROUP \
-  --name $STORAGE_ACCOUNT \
-  --location $LOCATION \
-  --sku Standard_LRS \
-  --kind StorageV2
-
-# Get connection string
-STORAGE_CONN=$(az storage account show-connection-string \
-  --resource-group $RESOURCE_GROUP \
-  --name $STORAGE_ACCOUNT \
-  -o tsv)
-
-# Get account key
-STORAGE_KEY=$(az storage account keys list \
-  --resource-group $RESOURCE_GROUP \
-  --account-name $STORAGE_ACCOUNT \
-  --query [0].value -o tsv)
-```
-
-### 9.2 Create Blob Container
+### 9.1 Setup Media Directory
 
 ```bash
-# Create container
-az storage container create \
-  --account-name $STORAGE_ACCOUNT \
-  --name media \
-  --public-access blob
+# Create media directory
+cd /var/www/backend
+mkdir -p media
+
+# Set permissions
+sudo chown -R deploy:deploy media
+chmod -R 755 media
 
 # Verify
-az storage container list --account-name $STORAGE_ACCOUNT
+ls -la media/
+# Output:
+# drwxr-xr-x  2 deploy deploy 4096 Jan 12 10:00 .
 ```
 
-### 9.3 Update Django Settings
+✅ **Media directory created!**
+
+### 9.2 Configure Django Settings
 
 ```bash
 # Edit Django settings
 nano /var/www/backend/backend/settings.py
 
-# Add at end:
-# Azure Blob Storage
-if not DEBUG:
-    STORAGES = {
-        "default": {
-            "BACKEND": "storages.backends.azure_storage.AzureStorage",
-            "ACCOUNT_NAME": os.getenv("AZURE_STORAGE_ACCOUNT_NAME"),
-            "ACCOUNT_KEY": os.getenv("AZURE_STORAGE_ACCOUNT_KEY"),
-            "AZURE_CONTAINER": os.getenv("AZURE_CONTAINER_NAME", "media"),
-            "AZURE_CUSTOM_DOMAIN": f"{os.getenv('AZURE_STORAGE_ACCOUNT_NAME')}.blob.core.windows.net",
-        },
-        "staticfiles": {
-            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
-        },
-    }
-    STATIC_URL = f"https://{ACCOUNT_NAME}.blob.core.windows.net/staticfiles/"
-    MEDIA_URL = f"https://{ACCOUNT_NAME}.blob.core.windows.net/media/"
+# Verify/Update media settings (should be already configured):
+# MEDIA_URL = '/media/'
+# MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# Update .env
-nano /var/www/backend/.env
+# For production, ensure this is set:
+# STORAGES = {
+#     "default": {
+#         "BACKEND": "django.core.files.storage.FileSystemStorage",
+#     },
+#     "staticfiles": {
+#         "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+#     },
+# }
 
-# Add:
-AZURE_STORAGE_ACCOUNT_NAME=ecommercestorage1734351234
-AZURE_STORAGE_ACCOUNT_KEY=your-key-here
-AZURE_CONTAINER_NAME=media
-
-# Install django-storages
-source /var/www/backend/venv/bin/activate
-pip install django-storages[azure]
-
-# Collect static files to Azure
-cd /var/www/backend
-python manage.py collectstatic --noinput
-
-# Restart backend
-sudo supervisorctl restart ecommerce-backend
+# Save and exit
 ```
+
+✅ **Django settings verified!**
+
+### 9.3 Nginx Configuration (Already Done in BƯỚC 6)
+
+> **Note**: Nginx đã được cấu hình để serve media files ở BƯỚC 6.1:
+> ```nginx
+> location /media/ {
+>     alias /var/www/backend/media/;
+>     expires 7d;
+>     add_header Cache-Control "public";
+> }
+> ```
+
+### 9.4 Test Media Upload
+
+```bash
+# Test upload via Django admin
+# 1. Login to admin: http://128.199.xxx.xxx/admin/
+# 2. Upload một file (product image, category image, etc.)
+# 3. Verify file trong media directory:
+ls -la /var/www/backend/media/
+
+# Test access file:
+curl http://128.199.xxx.xxx/media/products/test-image.jpg
+# Should return image data or 404 if not exists
+```
+
+✅ **Media storage working!**
+
+### 9.5 Setup Backup cho Media Files (Recommended)
+
+```bash
+# Create backup script
+nano ~/backup-media.sh
+
+# Add content:
+#!/bin/bash
+BACKUP_DIR="$HOME/backups"
+DATE=$(date +%Y%m%d_%H%M%S)
+mkdir -p $BACKUP_DIR
+
+# Backup media files
+tar -czf $BACKUP_DIR/media_$DATE.tar.gz -C /var/www/backend media/
+
+# Keep only last 7 days of backups
+find $BACKUP_DIR -name "media_*.tar.gz" -mtime +7 -delete
+
+echo "Media backup completed: $BACKUP_DIR/media_$DATE.tar.gz"
+
+# Save and exit
+chmod +x ~/backup-media.sh
+
+# Test backup
+~/backup-media.sh
+
+# Add to crontab (daily backup at 2 AM)
+crontab -e
+# Add line:
+# 0 2 * * * /home/deploy/backup-media.sh >> /home/deploy/backup.log 2>&1
+
+# Verify crontab
+crontab -l
+```
+
+✅ **Media backup configured!**
+
+> **💡 Tip**: Nếu sau này cần scale hoặc muốn dùng CDN, có thể migrate sang DigitalOcean Spaces:
+> - Cost: ~$5/month for 250GB storage + CDN
+> - Better performance với CDN
+> - Dễ scale khi traffic tăng
 
 ---
 
@@ -1252,7 +1293,7 @@ sudo tail -f /var/log/nginx/access.log
 
 # System logs
 sudo journalctl -u ecommerce-backend -f
-sudo journalctl -u pm2-azureuser -f
+sudo journalctl -u pm2-deploy -f
 ```
 
 ### 10.2 Monitor Resources
@@ -1375,28 +1416,28 @@ pm2 status
 
 ```bash
 # Test Frontend
-curl http://20.195.xxx.xxx
+curl http://128.199.xxx.xxx
 
 # Test API
-curl http://20.195.xxx.xxx/api/products/
+curl http://128.199.xxx.xxx/api/products/
 
 # Test Admin
-curl http://20.195.xxx.xxx/admin/
+curl http://128.199.xxx.xxx/admin/
 
 # Test Database
 mysql -u admin -p e_commerce -e "SELECT COUNT(*) FROM products_product;"
 
-# Test Blob Storage (upload file via API and check in Azure)
-# ... depends on implementation
+# Test Media Upload (upload file via admin and check in /var/www/backend/media/)
+ls -la /var/www/backend/media/
 ```
 
 ---
 
 ## 📋 Checklist
 
-- [ ] VM created (public IP noted)
-- [ ] SSH login working
-- [ ] System updated & firewall enabled
+- [ ] Droplet created (public IP noted)
+- [ ] Non-root user created & SSH login working
+- [ ] System updated & firewall enabled (UFW + Cloud Firewall)
 - [ ] Python 3.11 installed
 - [ ] Node.js 22 installed
 - [ ] MySQL 8.0 installed & database created
@@ -1409,7 +1450,7 @@ mysql -u admin -p e_commerce -e "SELECT COUNT(*) FROM products_product;"
 - [ ] PM2 + Next.js configured
 - [ ] Nginx reverse proxy working
 - [ ] SSL/HTTPS working (if domain available)
-- [ ] Azure Blob Storage configured
+- [ ] Media storage configured (local VPS)
 - [ ] All services auto-restart on reboot
 - [ ] Logs monitored & accessible
 - [ ] Full stack test passed
@@ -1425,14 +1466,10 @@ mysql -u admin -p e_commerce -e "SELECT COUNT(*) FROM products_product;"
 sudo systemctl status mysql
 
 # Check connection
-mysql -u ecommerce_user -p ecommerce_db -e "SELECT 1"
+mysql -u admin -p e_commerce -e "SELECT 1"
 
 # Check .env file
 cat /var/www/backend/.env | grep -E "DB_|REDIS_"
-
-# Test MySQL connection
-mysql -u admin -p e_commerce -e "SELECT 1"
-# Output: 1 (connection OK)
 
 # Check Supervisor logs
 sudo tail -f /var/log/ecommerce-backend-error.log
@@ -1512,6 +1549,27 @@ sudo supervisorctl update ecommerce-backend
 
 ---
 
+## � Cost Estimate (Monthly)
+
+| Service | SKU | Cost (USD) |
+|---------|-----|------------|
+| Droplet (Compute) | Basic 2GB | $12 |
+| (Optional) Managed MySQL | Basic 1GB | $15 |
+| (Optional) Managed Redis | Basic 1GB | $15 |
+| **Total (Local DB)** | | **~$12/month** |
+| **Total (Managed DB+Redis)** | | **~$42/month** |
+
+**So với Azure:**
+- Azure VM B1s: $15-30/month
+- Azure Blob: $2-5/month
+- **DigitalOcean rẻ hơn ~30-40%**
+
+**Free Credits:**
+- New account: $200 credit for 60 days
+- GitHub Student Pack: $200 credit
+
+---
+
 ## 📚 Reference Commands
 
 ### Quick Restart All
@@ -1529,28 +1587,53 @@ pm2 restart ecommerce-frontend
 
 ```bash
 # Backup MySQL
-mysqldump -u ecommerce_user -p ecommerce_db > backup_$(date +%Y%m%d_%H%M%S).sql
+mysqldump -u admin -p e_commerce > backup_$(date +%Y%m%d_%H%M%S).sql
 
-# Backup to Azure
-az storage blob upload \
-  --account-name $STORAGE_ACCOUNT \
-  --container-name backups \
-  --name backup.sql \
-  --file backup.sql
+# Backup to Spaces (using s3cmd)
+# Install s3cmd first:
+sudo apt install -y s3cmd
+s3cmd --configure
+# Enter Spaces credentials...
+
+# Upload backup
+s3cmd put backup_*.sql s3://ecommerce-media/backups/
+
+# Or using doctl:
+doctl spaces upload ecommerce-media backup_$(date +%Y%m%d_%H%M%S).sql --region sgp1
 ```
 
 ### SSH Tricks
 
 ```bash
-# SCP file to VM
-scp -r /local/path azureuser@20.195.xxx.xxx:/var/www/backend/
+# SCP file to Droplet
+scp -r /local/path deploy@128.199.xxx.xxx:/var/www/backend/
 
 # SSH with port forwarding
-ssh -L 3000:localhost:3000 azureuser@20.195.xxx.xxx
+ssh -L 3000:localhost:3000 deploy@128.199.xxx.xxx
 # Mở browser: http://localhost:3000
 
 # Mount via SSH (macOS)
-sshfs azureuser@20.195.xxx.xxx:/var/www ~/vm-mount
+sshfs deploy@128.199.xxx.xxx:/var/www ~/droplet-mount
+```
+
+### Droplet Management
+
+```bash
+# List droplets
+doctl compute droplet list
+
+# Power on/off
+doctl compute droplet-action power-off 123456789
+doctl compute droplet-action power-on 123456789
+
+# Reboot
+doctl compute droplet-action reboot 123456789
+
+# Create snapshot (backup)
+doctl compute droplet-action snapshot 123456789 --snapshot-name "ecommerce-backup-$(date +%Y%m%d)"
+
+# Resize droplet (change plan)
+doctl compute droplet-action resize 123456789 --size s-2vcpu-4gb --wait
 ```
 
 ---
@@ -1558,13 +1641,13 @@ sshfs azureuser@20.195.xxx.xxx:/var/www ~/vm-mount
 ## ✅ Sau khi Deploy
 
 **Bây giờ bạn đã có:**
-1. ✅ Production server (Ubuntu 22.04)
+1. ✅ Production server (Ubuntu 22.04 on DigitalOcean)
 2. ✅ Backend API running on port 8000 (Gunicorn + Supervisor)
 3. ✅ Frontend running on port 3000 (Node.js + PM2)
 4. ✅ Nginx reverse proxy on port 80/443
-5. ✅ MySQL database (local hoặc Azure managed)
-6. ✅ Redis cache (local hoặc Azure managed)
-7. ✅ Azure Blob Storage for media
+5. ✅ MySQL database (local hoặc managed)
+6. ✅ Redis cache (local hoặc managed)
+7. ✅ Local media storage (served via Nginx)
 8. ✅ SSL/HTTPS (Let's Encrypt)
 9. ✅ Auto-restart & monitoring
 10. ✅ Full Linux knowledge!
@@ -1578,29 +1661,109 @@ sshfs azureuser@20.195.xxx.xxx:/var/www ~/vm-mount
 
 ## 🎓 Learning Value
 
-Deploy trên VM dạy bạn:
-- ✅ Linux system administration
-- ✅ Process management (systemd, supervisor)
+Deploy trên DigitalOcean Droplet dạy bạn:
+- ✅ Linux system administration (Ubuntu)
+- ✅ Process management (systemd, supervisor, PM2)
 - ✅ Web server configuration (Nginx)
-- ✅ SSL/TLS certificate management
-- ✅ Database administration
-- ✅ Application debugging
+- ✅ SSL/TLS certificate management (Let's Encrypt)
+- ✅ Database administration (MySQL)
+- ✅ Caching strategies (Redis)
+- ✅ File storage & serving (Nginx)
+- ✅ Application debugging & troubleshooting
 - ✅ Production deployment practices
 - ✅ Monitoring & logging
 - ✅ Backup & disaster recovery
+- ✅ **Cloud platform (DigitalOcean)**
 
 **This is enterprise-level DevOps knowledge!** 🚀
 
 ---
 
+## 🌐 Next Steps
+
+### 1. Setup Domain Name
+
+```bash
+# Buy domain từ:
+# - Namecheap
+# - Google Domains  
+# - Cloudflare
+
+# Point DNS A record:
+# example.com → 128.199.xxx.xxx
+# www.example.com → 128.199.xxx.xxx
+
+# Wait for DNS propagation (5-30 minutes)
+# Check:
+dig example.com
+```
+
+### 2. Enable HTTPS
+
+```bash
+# After domain is ready:
+sudo certbot --nginx -d example.com -d www.example.com
+
+# Test auto-renewal:
+sudo certbot renew --dry-run
+```
+
+### 3. Setup Monitoring
+
+```bash
+# Option 1: DigitalOcean Monitoring (Free)
+# 1. Vào Droplet → Monitoring tab
+# 2. Enable "Enhanced Metrics" (CPU, RAM, Disk, Network)
+# 3. View real-time graphs
+
+# Option 2: Install Netdata (optional)
+bash <(curl -Ss https://my-netdata.io/kickstart.sh)
+# Access: http://128.199.xxx.xxx:19999
+
+# Option 3: External monitoring (recommended)
+# - UptimeRobot (free) - https://uptimerobot.com
+# - Pingdom
+# - StatusCake
+```
+
+### 4. Setup Automatic Backups
+
+```bash
+# DigitalOcean Droplet Backups (recommended)
+# Via Web UI: Droplet → Backups → Enable
+# Cost: 20% of droplet cost ($2.4/month for $12 droplet)
+
+# Via CLI:
+doctl compute droplet-action enable-backups 123456789
+
+# Or create manual snapshot:
+doctl compute droplet-action snapshot 123456789 \
+  --snapshot-name "ecommerce-backup-$(date +%Y%m%d)"
+```
+
+### 5. Implement CI/CD
+
+```bash
+# GitHub Actions for auto-deploy on git push
+# Create .github/workflows/deploy.yml in your repo
+# Example workflow:
+# - On push to main branch
+# - SSH to droplet
+# - Pull latest code
+# - Run migrations
+# - Restart services
+```
+
+---
+
 ## 🐳 So Sánh: Traditional vs Docker
 
-Nếu thêm Docker vào guide này, sẽ trở thành **VM + Docker Hybrid Approach**.
+Nếu thêm Docker vào guide này, sẽ trở thành **Droplet + Docker Hybrid Approach**.
 
 ### Cách Traditional (Guide Hiện Tại)
 
 ```bash
-# Cài trực tiếp lên VM:
+# Cài trực tiếp lên Droplet:
 sudo apt install python3.11
 sudo apt install nodejs
 sudo apt install mysql-server
@@ -1787,17 +1950,17 @@ Week 4+: Kubernetes
 - Microservices (multiple apps)
 - Scaling (easy to replicate)
 - CI/CD pipelines (automated builds)
-- Cloud deployment (AWS ECS, Azure ACI)
+- Cloud deployment (AWS ECS, DigitalOcean App Platform, Azure ACI)
 
 ---
 
 ### Hybrid: Traditional + Docker (Best of Both Worlds)
 
 ```
-VM (Ubuntu 22.04) + Docker Engine
+Droplet (Ubuntu 22.04) + Docker Engine
 
 ┌─────────────────────────────────┐
-│  Azure VM (Ubuntu)              │
+│  DigitalOcean Droplet (Ubuntu)  │
 │                                 │
 │  SSH Access ✅                  │
 │  └─ Manage, Debug, Monitor      │
@@ -2134,9 +2297,9 @@ REDIS_DB=0
 DJANGO_PORT=8000
 
 # Frontend Configuration
-NEXT_PUBLIC_API_URL=http://your-vm-ip/api
-NEXT_PUBLIC_WS_HOST=your-vm-ip
-FRONTEND_URL=http://your-vm-ip
+NEXT_PUBLIC_API_URL=http://your-droplet-ip/api
+NEXT_PUBLIC_WS_HOST=your-droplet-ip
+FRONTEND_URL=http://your-droplet-ip
 
 # Stripe Payment
 STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
@@ -2144,17 +2307,13 @@ STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
 STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
 
-# Azure Blob Storage (optional)
-AZURE_STORAGE_ACCOUNT_NAME=
-AZURE_STORAGE_ACCOUNT_KEY=
-AZURE_CONTAINER_NAME=media
-AZURE_CUSTOM_DOMAIN=
+# Media files served from local VPS (no object storage needed)
 EOF
 
 # Frontend .env.local.docker
 cat > frontend/.env.local.docker << 'EOF'
-NEXT_PUBLIC_API_URL=http://your-vm-ip/api
-NEXT_PUBLIC_WS_HOST=your-vm-ip
+NEXT_PUBLIC_API_URL=http://your-droplet-ip/api
+NEXT_PUBLIC_WS_HOST=your-droplet-ip
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
 EOF
 ```
@@ -2219,13 +2378,13 @@ git push origin main
 
 ✅ **Docker files pushed to GitHub!**
 
-### 12.4 Deploy lên Azure VM với Docker
+### 12.4 Deploy lên DigitalOcean Droplet với Docker
 
-#### Bước 1: Cài Docker trên VM
+#### Bước 1: Cài Docker trên Droplet
 
 ```bash
-# SSH vào VM
-ssh azureuser@20.2.82.70
+# SSH vào Droplet
+ssh deploy@128.199.xxx.xxx
 
 # Install Docker
 curl -fsSL https://get.docker.com -o get-docker.sh
@@ -2236,7 +2395,7 @@ sudo usermod -aG docker $USER
 
 # Logout and login again để apply group
 exit
-ssh azureuser@20.2.82.70
+ssh deploy@128.199.xxx.xxx
 
 # Verify Docker
 docker --version
@@ -2251,13 +2410,13 @@ docker compose version
 # Output: Docker Compose version v2.x.x
 ```
 
-✅ **Docker installed on VM!**
+✅ **Docker installed on Droplet!**
 
 #### Bước 2: Pull Code và Setup Environment
 
 ```bash
-# SSH vào VM
-ssh azureuser@20.2.82.70
+# SSH vào Droplet
+ssh deploy@128.199.xxx.xxx
 
 # Pull code mới nhất (hoặc clone nếu chưa có)
 cd /opt/E-Commerce
@@ -2266,7 +2425,7 @@ git pull origin main
 # Hoặc clone lần đầu:
 # cd /opt
 # sudo git clone https://github.com/dinhhoang235/E-Commerce.git
-# sudo chown -R azureuser:azureuser /opt/E-Commerce
+# sudo chown -R deploy:deploy /opt/E-Commerce
 
 # Copy và update environment files
 cd /opt/E-Commerce
@@ -2488,8 +2647,8 @@ sudo systemctl status docker
 # Test reboot
 sudo reboot
 
-# Sau khi VM restart, check:
-ssh azureuser@20.2.82.70
+# Sau khi Droplet restart, check:
+ssh deploy@128.199.xxx.xxx
 docker compose ps
 # All services should be running
 ```
@@ -2635,15 +2794,15 @@ docker compose up -d
 ### 13.1 Overview: CI/CD Pipeline
 
 ```
-Developer                GitHub Actions              Azure VM
+Developer                GitHub Actions         DigitalOcean Droplet
     ↓                          ↓                         ↓
-git push main          →  Workflow triggered     →  SSH vào VM
+git push main          →  Workflow triggered     →  SSH vào Droplet
                            ↓                          ↓
                        Run tests                  Pull code
                            ↓                          ↓
                        Build (if needed)          Restart services
                            ↓                          ↓
-                       Deploy to VM               Live!
+                       Deploy to Droplet          Live!
                            ↓
                        Send notification
 ```
@@ -2653,70 +2812,25 @@ git push main          →  Workflow triggered     →  SSH vào VM
 Trước khi setup CI/CD, cần có:
 
 ```bash
-✅ VM đã deploy thành công (Traditional hoặc Docker)
+✅ Droplet đã deploy thành công (Traditional hoặc Docker)
 ✅ GitHub repository với code
-✅ SSH access vào VM
+✅ SSH access vào Droplet với password
 ✅ GitHub account với repository admin access
 ```
 
-### 13.3 Setup SSH Key cho GitHub Actions
+### 13.3 Setup Password Authentication cho GitHub Actions
 
-#### Bước 1: Tạo SSH Key trên Local
+> **Note**: Vì dùng password authentication, ta sẽ dùng `sshpass` để tự động nhập password trong CI/CD
 
-```bash
-# Tạo SSH key riêng cho GitHub Actions (không dùng key cá nhân)
-ssh-keygen -t rsa -b 4096 -C "github-actions" -f ~/.ssh/github-actions -N ""
+#### Không cần setup gì thêm
 
-# Output:
-# ~/.ssh/github-actions (private key)
-# ~/.ssh/github-actions.pub (public key)
+Vì dùng password authentication, không cần tạo SSH keys. Chỉ cần add password vào GitHub Secrets.
 
-# View private key (sẽ add vào GitHub Secrets)
-cat ~/.ssh/github-actions
-# Output:
-# -----BEGIN OPENSSH PRIVATE KEY-----
-# b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAACFwAAAA...
-# -----END OPENSSH PRIVATE KEY-----
-
-# View public key (sẽ add vào VM)
-cat ~/.ssh/github-actions.pub
-# Output:
-# ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC... github-actions
-```
-
-✅ **SSH key generated!**
-
-#### Bước 2: Add Public Key vào VM
-
-```bash
-# SSH vào VM
-ssh azureuser@20.2.82.70
-
-# Add public key vào authorized_keys
-echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC... github-actions" >> ~/.ssh/authorized_keys
-
-# Set permissions
-chmod 600 ~/.ssh/authorized_keys
-chmod 700 ~/.ssh
-
-# Test từ local
-ssh -i ~/.ssh/github-actions azureuser@20.2.82.70 "echo 'SSH OK'"
-# Output: SSH OK
-```
-
-✅ **Public key added to VM!**
+✅ **Password authentication ready!**
 
 ### 13.4 Setup GitHub Secrets
 
-#### Bước 1: Copy Private Key
-
-```bash
-# Copy toàn bộ private key (bao gồm BEGIN và END)
-cat ~/.ssh/github-actions
-# Copy output vào clipboard
-```
-
-#### Bước 2: Add Secrets vào GitHub
+#### Add Secrets vào GitHub
 
 ```
 1. Mở GitHub repository: https://github.com/dinhhoang235/E-Commerce
@@ -2726,16 +2840,16 @@ cat ~/.ssh/github-actions
 Tạo các secrets sau:
 
 Secret 1:
-- Name: SSH_PRIVATE_KEY
-- Value: (paste private key từ bước 1)
+- Name: SSH_HOST
+- Value: 128.199.xxx.xxx (IP Droplet)
 
 Secret 2:
-- Name: SSH_HOST
-- Value: 20.2.82.70
+- Name: SSH_USER
+- Value: deploy
 
 Secret 3:
-- Name: SSH_USER
-- Value: azureuser
+- Name: SSH_PASSWORD
+- Value: (password của user deploy)
 
 Secret 4:
 - Name: SSH_PORT
@@ -2773,16 +2887,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+      - name: Install sshpass
+        run: sudo apt-get update && sudo apt-get install -y sshpass
 
-      - name: Deploy to VM
+      - name: Deploy to Droplet
+        env:
+          SSHPASS: ${{ secrets.SSH_PASSWORD }}
         run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'ENDSSH'
+          sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'ENDSSH'
             set -e
             
             echo "🚀 Starting deployment..."
@@ -2861,19 +2973,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+      - name: Install sshpass
+        run: sudo apt-get update && sudo apt-get install -y sshpass
 
-      - name: Deploy to VM with Docker
+      - name: Deploy to Droplet
+        env:
+          SSHPASS: ${{ secrets.SSH_PASSWORD }}
         run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'ENDSSH'
+          sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'ENDSSH'
             set -e
             
-            echo "🚀 Starting Docker deployment..."
+            echo "🚀 Starting deployment..."
             
             # Pull latest code
             cd /opt/E-Commerce
@@ -2981,16 +3091,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+      - name: Install sshpass
+        run: sudo apt-get update && sudo apt-get install -y sshpass
 
-      - name: Deploy to VM
+      - name: Deploy to Droplet
+        env:
+          SSHPASS: ${{ secrets.SSH_PASSWORD }}
         run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'ENDSSH'
+          sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'ENDSSH'
             set -e
             cd /opt/E-Commerce
             git pull origin main
@@ -3085,36 +3193,35 @@ git log -1  # Should see latest commit
 #### Workflow fails at SSH step
 
 ```bash
-# Check SSH key permissions on GitHub Secrets
-# Ensure private key includes:
-# -----BEGIN OPENSSH PRIVATE KEY-----
-# ...
-# -----END OPENSSH PRIVATE KEY-----
+# Check password in GitHub Secrets
+# Ensure SSH_PASSWORD is correct
 
 # Test SSH manually
-ssh -i ~/.ssh/github-actions azureuser@20.2.82.70
+sshpass -p 'your_password' ssh deploy@128.199.xxx.xxx
+# Hoặc dùng password prompt:
+ssh deploy@128.199.xxx.xxx
 ```
 
 #### Workflow fails at git pull
 
 ```bash
-# SSH vào VM, check git config
+# SSH vào Droplet, check git config
 cd /opt/E-Commerce
 git config --global --add safe.directory /opt/E-Commerce
 
 # Ensure permissions
-sudo chown -R azureuser:azureuser /opt/E-Commerce
+sudo chown -R deploy:deploy /opt/E-Commerce
 ```
 
 #### Workflow fails at Docker build
 
 ```bash
 # Check Docker permissions
-ssh azureuser@20.2.82.70
+ssh deploy@128.199.xxx.xxx
 docker ps  # Should work without sudo
 
 # If not, add user to docker group
-sudo usermod -aG docker azureuser
+sudo usermod -aG docker deploy
 # Logout and login again
 ```
 
