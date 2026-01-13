@@ -2010,6 +2010,25 @@ groups
 
 ✅ **Docker installed!**
 
+#### **Bước 3.5: Create Frontend Environment File**
+
+> **⚠️ CRITICAL**: Next.js needs `NEXT_PUBLIC_*` variables at **BUILD TIME**, not runtime.
+
+```bash
+cd /opt/E-Commerce
+
+# Extract NEXT_PUBLIC_* variables from .env to frontend/.env.production
+grep "^NEXT_PUBLIC" .env > frontend/.env.production
+
+# Verify file created
+cat frontend/.env.production
+
+# Should show:
+# NEXT_PUBLIC_API_URL=http://178.128.216.11/api
+# NEXT_PUBLIC_WS_HOST=178.128.216.11
+# NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+```
+
 #### **Bước 4: Build & Start Production Containers**
 
 ```bash
