@@ -1698,7 +1698,7 @@ doctl compute droplet-action snapshot 123456789 \
 
 > **Khi nào dùng**: Sau khi setup manual thành công, muốn deploy nhanh hơn cho lần sau hoặc môi trường khác
 > 
-> **Lợi ích**: Setup ở local, push lên Git, chỉ cần `git pull && docker-compose up` trên VM
+> **Lợi ích**: Setup ở local, push lên Git, chỉ cần `git pull && docker compose up` trên VM
 > 
 > **⏱️ Thời gian**: ~30 phút setup local + 10 phút deploy trên VM
 
@@ -1885,7 +1885,7 @@ cp .env.example .env
 nano .env
 
 # Start all services
-docker-compose up --build
+docker compose up --build
 
 # Access:
 # - Frontend: http://localhost
@@ -1893,7 +1893,7 @@ docker-compose up --build
 # - Admin: http://localhost:8080/admin
 
 # Stop services
-docker-compose down
+docker compose down
 ```
 
 ✅ **Development environment running!**
@@ -1988,16 +1988,15 @@ sudo sh get-docker.sh
 # Add user to docker group
 sudo usermod -aG docker deploy
 
-# Install Docker Compose
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
+# Docker Compose v2 đã được tích hợp sẵn trong Docker
+# Không cần install riêng như v1
 
 # Verify installation
 docker --version
 # Output: Docker version 24.x.x
 
-docker-compose --version
-# Output: docker-compose version 1.29.x
+docker compose version
+# Output: Docker Compose version v2.x.x
 
 # ⚠️ IMPORTANT: Logout and login again for group changes
 exit
@@ -2035,7 +2034,7 @@ cat frontend/.env.production
 cd /opt/E-Commerce
 
 # Build production images (first time)
-docker-compose -f docker-compose.prod.yml build --no-cache
+docker compose -f docker-compose.prod.yml build --no-cache
 
 # Output:
 # Building db...
@@ -2045,7 +2044,7 @@ docker-compose -f docker-compose.prod.yml build --no-cache
 # Building nginx...
 
 # Start all services
-docker-compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml up -d
 
 # Output:
 # Creating network "ecommerce_default" with driver "bridge"
@@ -2058,7 +2057,7 @@ docker-compose -f docker-compose.prod.yml up -d
 # Creating ecommerce-nginx-prod
 
 # Check status
-docker-compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml ps
 
 # Output:
 # Name                         State    Ports
@@ -2069,7 +2068,7 @@ docker-compose -f docker-compose.prod.yml ps
 # ecommerce-nginx-prod         Up       0.0.0.0:80->80/tcp
 
 # View logs
-docker-compose -f docker-compose.prod.yml logs -f
+docker compose -f docker-compose.prod.yml logs -f
 # Ctrl+C to exit logs
 ```
 
@@ -2081,7 +2080,7 @@ docker-compose -f docker-compose.prod.yml logs -f
 cd /opt/E-Commerce
 
 # Run migrations
-docker-compose -f docker-compose.prod.yml exec backend python manage.py migrate
+docker compose -f docker-compose.prod.yml exec backend python manage.py migrate
 
 # Output:
 # Running migrations:
@@ -2090,7 +2089,7 @@ docker-compose -f docker-compose.prod.yml exec backend python manage.py migrate
 #   ...
 
 # Create superuser
-docker-compose -f docker-compose.prod.yml exec backend python manage.py createsuperuser
+docker compose -f docker-compose.prod.yml exec backend python manage.py createsuperuser
 
 # Follow prompts:
 # Username: admin
@@ -2099,7 +2098,7 @@ docker-compose -f docker-compose.prod.yml exec backend python manage.py createsu
 # Password (again): ********
 
 # Collect static files (already done in Dockerfile, but verify)
-docker-compose -f docker-compose.prod.yml exec backend python manage.py collectstatic --noinput
+docker compose -f docker-compose.prod.yml exec backend python manage.py collectstatic --noinput
 ```
 
 ✅ **Database initialized!**
@@ -2157,22 +2156,22 @@ sudo certbot renew --dry-run
 cd /opt/E-Commerce
 
 # Stop all services
-docker-compose -f docker-compose.prod.yml down
+docker compose -f docker-compose.prod.yml down
 
 # Start all services
-docker-compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml up -d
 
 # Restart specific service
-docker-compose -f docker-compose.prod.yml restart backend
-docker-compose -f docker-compose.prod.yml restart frontend
+docker compose -f docker-compose.prod.yml restart backend
+docker compose -f docker-compose.prod.yml restart frontend
 
 # View logs
-docker-compose -f docker-compose.prod.yml logs -f backend
-docker-compose -f docker-compose.prod.yml logs backend --tail 100
+docker compose -f docker-compose.prod.yml logs -f backend
+docker compose -f docker-compose.prod.yml logs backend --tail 100
 
 # Execute command in container
-docker-compose -f docker-compose.prod.yml exec backend python manage.py shell
-docker-compose -f docker-compose.prod.yml exec db mysql -u root -p${MYSQL_ROOT_PASSWORD} ${MYSQL_DATABASE}
+docker compose -f docker-compose.prod.yml exec backend python manage.py shell
+docker compose -f docker-compose.prod.yml exec db mysql -u root -p${MYSQL_ROOT_PASSWORD} ${MYSQL_DATABASE}
 ```
 
 #### **Update Code & Rebuild**
@@ -2183,16 +2182,16 @@ cd /opt/E-Commerce
 git pull origin main
 
 # Rebuild changed services
-docker-compose -f docker-compose.prod.yml build backend frontend
+docker compose -f docker-compose.prod.yml build backend frontend
 
 # Restart với images mới
-docker-compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml up -d
 
 # Run migrations nếu có
-docker-compose -f docker-compose.prod.yml exec backend python manage.py migrate
+docker compose -f docker-compose.prod.yml exec backend python manage.py migrate
 
 # Restart services
-docker-compose -f docker-compose.prod.yml restart backend frontend
+docker compose -f docker-compose.prod.yml restart backend frontend
 ```
 
 #### **View Container Stats**
@@ -2203,14 +2202,14 @@ docker stats
 
 # List containers
 docker ps
-docker-compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml ps
 
 # List images
 docker images
 
 # Inspect container
-docker-compose -f docker-compose.prod.yml exec backend env
-docker-compose -f docker-compose.prod.yml exec backend ps aux
+docker compose -f docker-compose.prod.yml exec backend env
+docker compose -f docker-compose.prod.yml exec backend ps aux
 
 # Check container health
 docker inspect --format='{{.State.Health.Status}}' ecommerce-backend-prod
@@ -2237,7 +2236,7 @@ sudo reboot
 
 # After reboot, SSH lại và check:
 ssh deploy@128.199.xxx.xxx
-docker-compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml ps
 
 # Output: All services should be UP
 # Name                         State    Ports
@@ -2260,7 +2259,7 @@ docker-compose -f docker-compose.prod.yml ps
 cd /opt/E-Commerce
 
 # Option 1: Backup via mysqldump (recommended)
-docker-compose -f docker-compose.prod.yml exec db mysqldump \
+docker compose -f docker-compose.prod.yml exec db mysqldump \
   -u admin -p${MYSQL_PASSWORD} ${MYSQL_DATABASE} > backup_$(date +%Y%m%d).sql
 
 # Option 2: Backup entire volume
@@ -2279,7 +2278,7 @@ ls -lh backup_*.sql mysql_backup_*.tar.gz
 cd /opt/E-Commerce
 
 # Option 1: Restore from SQL dump
-cat backup_20260112.sql | docker-compose -f docker-compose.prod.yml exec -T db mysql \
+cat backup_20260112.sql | docker compose -f docker-compose.prod.yml exec -T db mysql \
   -u admin -p${MYSQL_PASSWORD} ${MYSQL_DATABASE}
 
 # Option 2: Restore from volume backup
@@ -2289,7 +2288,7 @@ docker run --rm \
   alpine tar xzf /backup/mysql_backup_20260112.tar.gz -C /
   
 # Restart backend after restore
-docker-compose -f docker-compose.prod.yml restart backend
+docker compose -f docker-compose.prod.yml restart backend
 ```
 
 #### **Automated Backup Script**
@@ -2306,7 +2305,7 @@ mkdir -p $BACKUP_DIR
 
 # Backup database
 cd /opt/E-Commerce
-docker-compose -f docker-compose.prod.yml exec -T db mysqldump \
+docker compose -f docker-compose.prod.yml exec -T db mysqldump \
   -u admin -p${MYSQL_PASSWORD} ${MYSQL_DATABASE} > $BACKUP_DIR/db_$DATE.sql
 
 # Backup media files
@@ -2341,14 +2340,14 @@ crontab -e
 cd /opt/E-Commerce
 
 # Check logs
-docker-compose -f docker-compose.prod.yml logs backend
+docker compose -f docker-compose.prod.yml logs backend
 
 # Check container status
-docker-compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml ps
 
 # Rebuild image
-docker-compose -f docker-compose.prod.yml build --no-cache backend
-docker-compose -f docker-compose.prod.yml up -d backend
+docker compose -f docker-compose.prod.yml build --no-cache backend
+docker compose -f docker-compose.prod.yml up -d backend
 ```
 
 #### **Port conflicts**
@@ -2363,7 +2362,7 @@ sudo systemctl stop nginx                   # If host nginx running
 sudo systemctl stop mysql                   # If host MySQL running
 
 # Restart Docker containers
-docker-compose -f docker-compose.prod.yml restart
+docker compose -f docker-compose.prod.yml restart
 ```
 
 #### **Database connection errors**
@@ -2372,16 +2371,16 @@ docker-compose -f docker-compose.prod.yml restart
 cd /opt/E-Commerce
 
 # Check MySQL container
-docker-compose -f docker-compose.prod.yml logs db
+docker compose -f docker-compose.prod.yml logs db
 
 # Check network connectivity
-docker-compose -f docker-compose.prod.yml exec backend ping db
+docker compose -f docker-compose.prod.yml exec backend ping db
 
 # Check environment variables
-docker-compose -f docker-compose.prod.yml exec backend env | grep DB_
+docker compose -f docker-compose.prod.yml exec backend env | grep DB_
 
 # Restart database
-docker-compose -f docker-compose.prod.yml restart db backend
+docker compose -f docker-compose.prod.yml restart db backend
 ```
 
 #### **Out of disk space**
@@ -2410,13 +2409,13 @@ docker system prune -a --volumes
 cd /opt/E-Commerce
 
 # Backend logs
-docker-compose -f docker-compose.prod.yml logs backend --tail 200
+docker compose -f docker-compose.prod.yml logs backend --tail 200
 
 # Frontend logs
-docker-compose -f docker-compose.prod.yml logs frontend --tail 200
+docker compose -f docker-compose.prod.yml logs frontend --tail 200
 
 # Nginx logs
-docker-compose -f docker-compose.prod.yml logs nginx --tail 200
+docker compose -f docker-compose.prod.yml logs nginx --tail 200
 
 # All logs
 docker-compose -f docker-compose.prod.yml logs --tail 200
